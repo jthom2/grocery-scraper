@@ -24,13 +24,6 @@ item_stacks = data['props']['pageProps']['initialData']['searchResult']['itemSta
 
 
 
-
-
-
-
-
-
-
 # create clean list of results
 results = []
 result_count = 0

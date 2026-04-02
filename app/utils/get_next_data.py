@@ -11,6 +11,3 @@ def get_next_data(page):
     data = orjson.loads(str(next_data[0].text))
     
     return next_data, data
-
-if __name__ == "__main__":
-    next_data, data = get_next_data(page)

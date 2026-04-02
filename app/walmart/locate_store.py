@@ -38,15 +38,6 @@ print(f"{'='*50}")
 
 
 
-
-
-
-
-
-
-
-
-
 stores = []
 
 # clean up data to easy to read format

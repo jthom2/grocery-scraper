@@ -22,12 +22,3 @@ def get_city_state(zip_code):
     state = place['state abbreviation']
     return city, state
 
-if __name__ == "__main__":
-    zip_input = input("Enter zip code: ")
-    res_city, res_state = get_city_state(zip_input)
-    if res_city and res_state:
-        print(res_city)
-        print(res_state)
-    else:
-        print("Zip code not found.")
-
