@@ -8,7 +8,8 @@ query = input("Search Walmart for: ")
 page = StealthyFetcher.fetch(
     f'https://www.walmart.com/search?q={query}',
     headless=True,
-    disable_resources=True
+    disable_resources=True,
+    load_dom=False
 )
 
 # Extract product data from the embedded __NEXT_DATA__ JSON
