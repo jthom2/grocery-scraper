@@ -1,5 +1,5 @@
-import orjson
 from scrapling.fetchers import Fetcher
+import orjson
 
 query = input("Search Walmart for: ")
 
@@ -19,7 +19,7 @@ if not next_data:
     print(f"Status: {page.status} | URL: {page.url}")
     exit(1)
 
-# quickly parse the json data
+# parse json data
 data = orjson.loads(str(next_data[0].text))
 item_stacks = data['props']['pageProps']['initialData']['searchResult']['itemStacks']
 
