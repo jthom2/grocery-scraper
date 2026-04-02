@@ -1,4 +1,13 @@
+import sys
+from pathlib import Path
+
+# Add project root to sys.path to allow imports from app
+project_root = str(Path(__file__).resolve().parent.parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+##################################################################
 from scrapling.fetchers import Fetcher
+from app.utils import get_next_data
 import orjson
 
 query = input("Search Walmart for: ")
@@ -13,14 +22,9 @@ page = Fetcher.get(
     retries=1,
 )
 
-# extract __NEXT_DATA__ JSON
-next_data = page.css('script#__NEXT_DATA__')
-if not next_data:
-    print(f"Status: {page.status} | URL: {page.url}")
-    exit(1)
+# extract info hidden in __NEXT_DATA__ JSON
+next_data, data = get_next_data.get_next_data(page)
 
-# parse json data
-data = orjson.loads(str(next_data[0].text))
 item_stacks = data['props']['pageProps']['initialData']['searchResult']['itemStacks']
 
 # prepare list of results
