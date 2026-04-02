@@ -1,7 +1,6 @@
 scrapling_docs.md
-gemini.md
-CLAUDE.md
 .venv/
+.vscode/
 __pycache__/
 *.py[cod]
 *$py.class
