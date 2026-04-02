@@ -1,5 +1,6 @@
 from scrapling.fetchers import Fetcher
 
+# fetcher template
 def fetch(url, params=None):
     page = Fetcher.get(
         url,
