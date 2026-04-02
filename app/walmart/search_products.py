@@ -6,28 +6,32 @@ project_root = str(Path(__file__).resolve().parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 ##################################################################
-from scrapling.fetchers import Fetcher
-from app.utils import get_next_data
-import orjson
+from app.utils import get_next_data, fetcher
 
 query = input("Search Walmart for: ")
 
-# scrape walmart search for a specific query
-page = Fetcher.get(
-    'https://www.walmart.com/search',
-    params={'q': query},
-    stealthy_headers=True,
-    impersonate="chrome",
-    timeout=10,
-    retries=1,
-)
+# scrape product listings by query
+url = 'https://www.walmart.com/search'
+page = fetcher.fetch(url, {'q': query})
 
 # extract info hidden in __NEXT_DATA__ JSON
 next_data, data = get_next_data.get_next_data(page)
 
+# parses json data
 item_stacks = data['props']['pageProps']['initialData']['searchResult']['itemStacks']
 
-# prepare list of results
+
+
+
+
+
+
+
+
+
+
+
+# create clean list of results
 results = []
 result_count = 0
 

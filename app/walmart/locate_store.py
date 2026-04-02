@@ -6,8 +6,7 @@ project_root = str(Path(__file__).resolve().parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 ##################################################################
-from scrapling.fetchers import Fetcher
-from app.utils import zip2loc, get_next_data
+from app.utils import zip2loc, get_next_data, fetcher
 
 zip_input = input("Enter zip code: ")
 city, state = zip2loc.get_city_state(zip_input)
@@ -17,15 +16,11 @@ if not city or not state:
     exit(1)
 
 
-# scrape store locations based on city and state
-page = Fetcher.get(
-    f'https://www.walmart.com/store-directory/{state}/{city}',
-    stealthy_headers=True,
-    impersonate="chrome",
-    timeout=10,
-    retries=1,
-)
 
+url = f'https://www.walmart.com/store-directory/{state}/{city}'
+
+# scrape store locations based on city and state
+page = fetcher.fetch(url)
 
 
 # extract info hidden in __NEXT_DATA__ JSON
@@ -38,6 +33,18 @@ nearby_nodes = data.get('props', {}).get('pageProps', {}).get('initialData', {})
 print(f"\n{'='*50}")
 print(f"Walmart Stores in {city.title()}, {state.upper()}")
 print(f"{'='*50}")
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 stores = []
