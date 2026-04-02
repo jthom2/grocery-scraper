@@ -1,79 +1,68 @@
-import json
+import orjson
 from scrapling.fetchers import Fetcher
-
 
 query = input("Search Walmart for: ")
 
-# Crawl function
+# scrape walmart search for a specific query
 page = Fetcher.get(
-    f'https://www.walmart.com/search?q={query}',
+    'https://www.walmart.com/search',
+    params={'q': query},
     stealthy_headers=True,
-    impersonate="chrome"
+    impersonate="chrome",
+    timeout=10,
+    retries=1,
 )
 
-# Extract product data from the embedded __NEXT_DATA__ JSON
+# extract __NEXT_DATA__ JSON
 next_data = page.css('script#__NEXT_DATA__')
 if not next_data:
     print(f"Status: {page.status} | URL: {page.url}")
     exit(1)
 
-data = json.loads(next_data[0].text)
+# quickly parse the json data
+data = orjson.loads(str(next_data[0].text))
 item_stacks = data['props']['pageProps']['initialData']['searchResult']['itemStacks']
 
-# Adds products & their info to array
+# prepare list of results
 results = []
-all_items = (item for stack in item_stacks for item in stack.get('items', []))
+result_count = 0
 
-for item in all_items:
-    if len(results) >= 5:
+for stack in item_stacks:
+    if result_count >= 5:
         break
-        
-    # Skips ads
-    if not item.get('name') or item.get('__typename') == 'SearchPlaceholderProduct':
-        continue
+    for item in stack.get('items', ()):
+        if result_count >= 5:
+            break
 
-    rating_data = item.get('rating', {}) or {}
-    price_info = item.get('priceInfo', {}) or {}
-    availability = item.get('availabilityStatusV2', {}) or {}
+        # skip over invalid or placeholder items (e.g. ads)
+        if not (name := item.get('name')) or item.get('__typename') == 'SearchPlaceholderProduct':
+            continue
 
-    results.append({
-        'name': item.get('name'),
-        'brand': item.get('brand'),
-        'price': item.get('price'),
-        'price_display': price_info.get('linePriceDisplay'),
-        'unit_price': price_info.get('unitPrice'),
-        'was_price': price_info.get('wasPrice') or None,
-        'savings': price_info.get('savings') or None,
-        'rating': rating_data.get('averageRating'),
-        'reviews': rating_data.get('numberOfReviews'),
-        'image': item.get('image'),
-        'in_stock': availability.get('value') == 'IN_STOCK',
-        'availability': availability.get('display'),
-        'url': f"https://www.walmart.com{item.get('canonicalUrl', '')}",
-        'description': item.get('shortDescription', ''),
-    })
+        # speed up dict access
+        _get = item.get
+        rating_data = _get('rating') or {}
+        price_info = _get('priceInfo') or {}
+        availability = _get('availabilityStatusV2') or {}
 
-# Print how many results found
+        results.append({
+            'name': name,
+            'brand': _get('brand'),
+            'price': _get('price'),
+            'price_display': price_info.get('linePriceDisplay'),
+            'unit_price': price_info.get('unitPrice'),
+            'was_price': price_info.get('wasPrice') or None,
+            'savings': price_info.get('savings') or None,
+            'rating': rating_data.get('averageRating'),
+            'reviews': rating_data.get('numberOfReviews'),
+            'image': _get('image'),
+            'in_stock': availability.get('value') == 'IN_STOCK',
+            'availability': availability.get('display'),
+            'url': f"https://www.walmart.com{_get('canonicalUrl', '')}",
+            'description': _get('shortDescription', ''),
+        })
+        result_count += 1
+
+# console sanity check
 print(f"\n{'='*60}")
 print(f"Found {len(results)} products for '{query}'")
 print(f"{'='*60}\n")
-
-##### Prints results
-# for i, product in enumerate(results, 1):
-#     print(f"{i}. {product['name']}")
-#     if product['brand']:
-#         print(f"   Brand: {product['brand']}")
-#     print(f"   Price: {product['price_display'] or 'N/A'}", end="")
-#     if product['unit_price']:
-#         print(f" ({product['unit_price']})", end="")
-#     if product['was_price']:
-#         print(f"  [was {product['was_price']}]", end="")
-#     if product['savings']:
-#         print(f"  SAVE {product['savings']}", end="")
-#     print()
-#     if product['rating']:
-#         stars = '★' * int(product['rating']) + '☆' * (5 - int(product['rating']))
-#         print(f"   Rating: {stars} {product['rating']}/5 ({product['reviews']:,} reviews)")
-#     print(f"   Stock: {'✅ ' + product['availability'] if product['in_stock'] else '❌ Out of Stock'}")
-#     print(f"   URL: {product['url']}")
-#     print()
