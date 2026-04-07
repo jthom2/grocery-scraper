@@ -6,82 +6,99 @@ project_root = str(Path(__file__).resolve().parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 ##################################################################
+from urllib.parse import quote
+
 from app.utils import zip2loc, get_next_data, fetcher
 
-zip_input = input("Enter zip code: ")
-city, state = zip2loc.get_city_state(zip_input)
+# Look up nearby Walmart stores for a zip code.
+def find_stores(zip_code, max_stores=4):
+    city, state = zip2loc.get_city_state(zip_code)
 
-if not city or not state:
-    print(f"Error: Could not find location for zip code '{zip_input}'.")
-    exit(1)
+    if not city or not state:
+        print(f"Error: Could not find location for zip code '{zip_code}'.")
+        return []
 
+    url = f'https://www.walmart.com/store-directory/{quote(state)}/{quote(city)}'
+    page = fetcher.fetch(url)
 
+    # extract info hidden in __NEXT_DATA__ JSON
+    next_data, data = get_next_data.get_next_data(page)
 
-url = f'https://www.walmart.com/store-directory/{state}/{city}'
+    # parses json data
+    nearby_nodes = (
+        data.get('props', {})
+        .get('pageProps', {})
+        .get('initialData', {})
+        .get('initialDataNearbyNodes', {})
+        .get('data', {})
+        .get('nearByNodes', {})
+        .get('nodes', [])
+    )
 
-# scrape store locations based on city and state
-page = fetcher.fetch(url)
+    if not nearby_nodes:
+        return []
 
+    stores = []
+    for node in nearby_nodes[:max_stores]:
+        name = node.get('displayName') or node.get('name') or "Unknown Store"
 
-# extract info hidden in __NEXT_DATA__ JSON
-next_data, data = get_next_data.get_next_data(page)
+        address_info = node.get('address', {})
+        addr_line_1 = address_info.get('addressLineOne', '')
+        addr_city = address_info.get('city', '')
+        addr_state = address_info.get('state', '')
+        addr_zip = address_info.get('postalCode', '')
 
+        address_str = f"{addr_line_1}, {addr_city}, {addr_state} {addr_zip}".strip(", ")
+        store_id = node.get('id', 'N/A')
 
-# parses json data
-nearby_nodes = data.get('props', {}).get('pageProps', {}).get('initialData', {}).get('initialDataNearbyNodes', {}).get('data', {}).get('nearByNodes', {}).get('nodes', [])
+        stores.append({
+            'name': name,
+            'store_id': store_id,
+            'address': address_str,
+            'address_info': address_info,
+        })
 
-print(f"\n{'='*50}")
-print(f"Walmart Stores in {city.title()}, {state.upper()}")
-print(f"{'='*50}")
-
-
-
-
-
-stores = []
-
-# clean up data to easy to read format
-if not nearby_nodes:
-    print("No stores found.")
-    exit(1)
-
-for i, node in enumerate(nearby_nodes[:4], start=1):
-    name = node.get('displayName') or node.get('name') or "Unknown Store"
-
-    address_info = node.get('address', {})
-    addr_line_1 = address_info.get('addressLineOne', '')
-    addr_city = address_info.get('city', '')
-    addr_state = address_info.get('state', '')
-    addr_zip = address_info.get('postalCode', '')
-
-    address_str = f"{addr_line_1}, {addr_city}, {addr_state} {addr_zip}".strip(", ")
-    store_id = node.get('id', 'N/A')
-
-    store_data = {
-        'name': name,
-        'store_id': store_id,
-        'address': address_str,
-        'address_info': address_info,
-    }
-    stores.append(store_data)
-
-    print(f"{i}. {name}")
-    print(f"   Store ID: {store_id}")
-    print(f"   Address: {address_str}\n")
-
-# store selection
-selection = input("Select a store (1-4): ")
-try:
-    selection_idx = int(selection) - 1
-    if 0 <= selection_idx < len(stores):
-        selected_store = stores[selection_idx]
-        print(f"\nSelected: {selected_store['name']} ID: {selected_store['store_id']}")
-    else:
-        print("Invalid selection.")
-        exit(1)
-except ValueError:
-    print("Invalid input. Enter a number 1-4.")
-    exit(1)
+    return stores
 
 
-selected_id = selected_store['store_id']
+def display_and_select(stores, zip_code):
+    print(f"\n{'='*50}")
+    print(f"Walmart Stores near {zip_code}")
+    print(f"{'='*50}")
+
+    for i, store in enumerate(stores, start=1):
+        print(f"{i}. {store['name']}")
+        print(f"   Store ID: {store['store_id']}")
+        print(f"   Address: {store['address']}\n")
+
+    selection = input(f"Select a store (1-{len(stores)}): ")
+    try:
+        idx = int(selection) - 1
+        if 0 <= idx < len(stores):
+            selected = stores[idx]
+            print(f"\nSelected: {selected['name']} (ID: {selected['store_id']})")
+            return selected['store_id'], zip_code
+        else:
+            print("Invalid selection.")
+            return None, None
+    except ValueError:
+        print(f"Invalid input. Enter a number 1-{len(stores)}.")
+        return None, None
+
+# ask for zip → find stores → select one.
+def find_and_select_store():
+    zip_code = input("Enter zip code: ")
+    stores = find_stores(zip_code)
+
+    if not stores:
+        print("No stores found.")
+        return None, None
+
+    return display_and_select(stores, zip_code)
+
+
+# standalone entry point
+if __name__ == "__main__":
+    store_id, zip_code = find_and_select_store()
+    if store_id:
+        print(f"\nStore ID: {store_id}, Zip: {zip_code}")
