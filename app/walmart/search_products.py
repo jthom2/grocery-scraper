@@ -10,13 +10,9 @@ from app.utils import get_next_data, fetcher
 
 WALMART_REFERER = "https://www.walmart.com/"
 
-
+# search Walmart for products by query.
+# optionally pass location cookies to scope results to a specific store.
 def search(query, cookies=None, max_results=5):
-    """
-    Search Walmart for products by query.
-    Optionally pass location cookies to scope results to a specific store.
-    Returns a list of product dicts.
-    """
     url = 'https://www.walmart.com/search'
     headers = {"Referer": WALMART_REFERER}
 
@@ -76,7 +72,6 @@ def search(query, cookies=None, max_results=5):
 
 
 def display_results(results, query):
-    """Print search results to the console."""
     print(f"\n{'='*60}")
     print(f"Found {len(results)} products for '{query}'")
     print(f"{'='*60}\n")

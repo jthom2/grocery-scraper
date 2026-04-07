@@ -8,12 +8,8 @@ if project_root not in sys.path:
 ##################################################################
 from app.utils import zip2loc, get_next_data, fetcher
 
-
+# Look up nearby Walmart stores for a zip code.
 def find_stores(zip_code, max_stores=4):
-    """
-    Look up nearby Walmart stores for a zip code.
-    Returns a list of store dicts with name, store_id, address, and address_info.
-    """
     city, state = zip2loc.get_city_state(zip_code)
 
     if not city or not state:
@@ -64,10 +60,6 @@ def find_stores(zip_code, max_stores=4):
 
 
 def display_and_select(stores, zip_code):
-    """
-    Display a list of stores and prompt the user to select one.
-    Returns (store_id, zip_code) for the selected store.
-    """
     print(f"\n{'='*50}")
     print(f"Walmart Stores near {zip_code}")
     print(f"{'='*50}")
@@ -91,12 +83,8 @@ def display_and_select(stores, zip_code):
         print(f"Invalid input. Enter a number 1-{len(stores)}.")
         return None, None
 
-
+# ask for zip → find stores → select one.
 def find_and_select_store():
-    """
-    Full interactive flow: ask for zip → find stores → select one.
-    Returns (store_id, zip_code) or (None, None) on failure.
-    """
     zip_code = input("Enter zip code: ")
     stores = find_stores(zip_code)
 
