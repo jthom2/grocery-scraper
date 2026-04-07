@@ -6,6 +6,8 @@ project_root = str(Path(__file__).resolve().parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 ##################################################################
+from urllib.parse import quote
+
 from app.utils import zip2loc, get_next_data, fetcher
 
 # Look up nearby Walmart stores for a zip code.
@@ -16,7 +18,7 @@ def find_stores(zip_code, max_stores=4):
         print(f"Error: Could not find location for zip code '{zip_code}'.")
         return []
 
-    url = f'https://www.walmart.com/store-directory/{state}/{city}'
+    url = f'https://www.walmart.com/store-directory/{quote(state)}/{quote(city)}'
     page = fetcher.fetch(url)
 
     # extract info hidden in __NEXT_DATA__ JSON

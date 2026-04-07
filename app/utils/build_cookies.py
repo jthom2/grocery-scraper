@@ -25,7 +25,7 @@ def build_location_cookies(store_id, zip_code):
         "validateKey": f"prod:v2:{acid}",
     }
 
-    # serialize → base64 → URL-encode (matches Walmart's cookie format)
+    # serialize → base64 → URL-encode (Walmart's cookie format)
     json_str = json.dumps(payload, separators=(",", ":"))
     b64 = base64.b64encode(json_str.encode("utf-8")).decode("utf-8")
     encoded = quote(b64, safe="")

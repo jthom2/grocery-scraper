@@ -8,7 +8,7 @@ import requests
 
 def get_city_state(zip_code):
     url = f"https://api.zippopotam.us/us/{zip_code}"
-    response = requests.get(url)
+    response = requests.get(url, timeout=10)
     
     if response.status_code != 200:
         return None, None
