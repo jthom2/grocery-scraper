@@ -19,6 +19,7 @@ dependencies = [
 [project.scripts]
 walmart-search = "app.walmart.store_search:main"
 kroger-search = "app.kroger.store_search:main"
+publix-search = "app.publix.store_search:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

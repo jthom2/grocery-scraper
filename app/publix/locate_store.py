@@ -1,49 +1,6 @@
-from app.publix.constants import REFERER, STORE_DIRECTORY_URL, BASE_URL
+from app.publix.constants import REFERER, STORE_DIRECTORY_URL
 from app.utils import fetcher, store_selection
-import json
 
-zip_code = input("ZIP: ")
-
-params = {'types': 'R,G,H,N,S',
-          'count': '30',
-          'distance': '50',
-          'includeOpenAndCloseDates': 'true',
-          'zip': zip_code,
-          'isWebsite': 'true'  
-        }
-
-headers = {"Referer": REFERER}
-
-page = fetcher.fetch(STORE_DIRECTORY_URL, params=params, headers=headers)
-
-data = page.json()
-
-stores_data = data.get('stores', {})
-
-max_results=4
-results = []
-for store in stores_data[:max_results]:
-    store_id = store.get('storeNumber', {})
-    store_name = store.get('name', {})
-    store_short_name = store.get('shortName', {})
-    store_address = store.get('address', {}).get('streetAddress')
-    store_city = store.get('address', {}).get('city')
-    store_state = store.get('address', {}).get('state')
-    store_zip = store.get('address', {}).get('zip')
-    store_phone = store.get('phoneNumbers', {}).get('Store', {})
-
-
-
-    results.append({
-      'id': store_id,
-      'name': store_name,
-      'short_name': store_short_name,
-      'address': store_address,
-      'city': store_city,
-      'state': store_state,
-      'zip': store_zip,
-      'phone': store_phone
-    })
 
 def display_stores(stores, zip_code):
     print(f"\n{'='*60}")
@@ -56,7 +13,53 @@ def display_stores(stores, zip_code):
         print(f"   Phone: {store['phone']}")
         print(f"   Location ID: {store['id']}\n")
 
-display_stores(stores=results, zip_code=zip_code)
 
-selected = store_selection.select_from_list(results)
-selected_id = selected['id']
+def fetch_stores(zip_code, max_results=4):
+    params = {
+        'types': 'R,G,H,N,S',
+        'count': '30',
+        'distance': '50',
+        'includeOpenAndCloseDates': 'true',
+        'zip': zip_code,
+        'isWebsite': 'true'
+    }
+
+    headers = {"Referer": REFERER}
+    page = fetcher.fetch(STORE_DIRECTORY_URL, params=params, headers=headers)
+    data = page.json()
+    stores_data = data.get('stores', [])
+
+    results = []
+    for store in stores_data[:max_results]:
+        _get = store.get
+        address = _get('address', {})
+        results.append({
+            'id': _get('storeNumber'),
+            'name': _get('name'),
+            'short_name': _get('shortName'),
+            'address': address.get('streetAddress'),
+            'city': address.get('city'),
+            'state': address.get('state'),
+            'zip': address.get('zip'),
+            'phone': _get('phoneNumbers', {}).get('Store')
+        })
+
+    return results
+
+
+def find_and_select_store():
+    zip_code = input("Enter ZIP code: ").strip()
+    stores = fetch_stores(zip_code)
+
+    if not stores:
+        print("No stores found.")
+        return None, zip_code
+
+    display_stores(stores, zip_code)
+    selected = store_selection.select_from_list(stores)
+    return selected['id'], zip_code
+
+
+if __name__ == "__main__":
+    store_id, zip_code = find_and_select_store()
+    print(f"Selected store {store_id} in ZIP {zip_code}")
