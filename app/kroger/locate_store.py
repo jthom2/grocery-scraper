@@ -91,6 +91,16 @@ def select_store(stores):
             print("Invalid input. Please enter a number.")
 
 
+def find_and_select_store():
+    zip_code = input("ZIP: ")
+    stores = get_stores(zip_code)
+    display_stores(stores, zip_code)
+    selected = select_store(stores)
+    if selected:
+        return selected['location_id'], zip_code
+    return None, None
+
+
 if __name__ == "__main__":
     zip_code = input("Enter zip code: ")
     stores = get_stores(zip_code)
