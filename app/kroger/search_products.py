@@ -36,13 +36,16 @@ def get_front_image(images, size='large'):
     return None
 
 
-def search(query, max_results=5):
+def search(query, cookies=None, max_results=5):
     url = 'https://www.kroger.com/search'
     headers = {"Referer": KROGER_REFERER}
     params = {'query': query, 'searchType': 'default_search'}
 
-    page = fetcher.fetch(url, params=params, headers=headers)
+
+    page = fetcher.fetch(url, params=params, cookies=cookies, headers=headers)
+
     state = extract_initial_state(page)
+
 
     # navigate to products list
     try:

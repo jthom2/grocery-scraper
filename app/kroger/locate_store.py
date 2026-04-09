@@ -44,6 +44,7 @@ def get_stores(zip_code, max_results=10):
             'brand': store.get('brand'),
             'location_id': store.get('locationId'),
             'store_number': store.get('storeNumber'),
+            'division': store.get('loyaltyDivisionNumber'),
             'address': full_address,
             'city_state_zip': city_state_zip,
             'phone': phone.get('pretty'),
@@ -99,3 +100,4 @@ if __name__ == "__main__":
     if selected:
         print(f"\nSelected: {selected['name']}")
         print(f"Location ID: {selected['location_id']}")
+        
