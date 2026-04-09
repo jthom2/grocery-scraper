@@ -1,15 +1,8 @@
-import sys
 import re
 import json
-from pathlib import Path
 
-project_root = str(Path(__file__).resolve().parent.parent.parent)
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-##################################################################
 from app.utils import fetcher
-
-KROGER_REFERER = "https://www.kroger.com/"
+from app.kroger.constants import REFERER, SEARCH_URL, BASE_URL
 
 
 class KrogerDataNotFoundError(Exception):
@@ -37,17 +30,13 @@ def get_front_image(images, size='large'):
 
 
 def search(query, cookies=None, max_results=5):
-    url = 'https://www.kroger.com/search'
-    headers = {"Referer": KROGER_REFERER}
+    headers = {"Referer": REFERER}
     params = {'query': query, 'searchType': 'default_search'}
 
-
-    page = fetcher.fetch(url, params=params, cookies=cookies, headers=headers)
+    page = fetcher.fetch(SEARCH_URL, params=params, cookies=cookies, headers=headers)
 
     state = extract_initial_state(page)
 
-
-    # navigate to products list
     try:
         products_data = state['calypso']['useCases']['getProducts']['search-grid']['response']['data']['products']
     except (KeyError, TypeError):
@@ -62,11 +51,9 @@ def search(query, cookies=None, max_results=5):
         inventory = product.get('inventory', {})
         ratings = item.get('ratingsAndReviewsAggregate', {})
 
-        # get stock status
         locations = inventory.get('locations', [])
         stock_level = locations[0].get('stockLevel') if locations else None
 
-        # build result
         results.append({
             'name': item.get('description'),
             'brand': (item.get('brand') or {}).get('name'),
@@ -81,7 +68,7 @@ def search(query, cookies=None, max_results=5):
             'in_stock': stock_level in ('HIGH', 'LOW', 'MEDIUM') if stock_level else None,
             'stock_level': stock_level,
             'upc': product.get('id'),
-            'url': f"https://www.kroger.com/p/{item.get('seoDescription')}/{product.get('id')}",
+            'url': f"{BASE_URL}/p/{item.get('seoDescription')}/{product.get('id')}",
         })
 
     return results

@@ -1,11 +1,3 @@
-import sys
-from pathlib import Path
-
-# Add project root to sys.path to allow imports from app
-project_root = str(Path(__file__).resolve().parent.parent.parent)
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-##################################################################
 from app.walmart import locate_store, search_products
 from app.utils import build_cookies
 
