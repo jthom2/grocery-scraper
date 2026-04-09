@@ -15,7 +15,7 @@ def search(query, store_id=None, max_results=15):
         cookies = [{'name': 'Store', 'value': f'{{"storeNumber":"{store_id}"}}', 'url': f'{BASE_URL}/'}]
 
     fetcher = StealthyFetcher()
-    page = fetcher.fetch(url, cookies=cookies, headless=True, network_idle=True)
+    page = fetcher.fetch(url, cookies=cookies, headless=True) # debug:  , network_idle=True
 
     # Verify store context if requested
     html = str(page.body)
@@ -41,8 +41,12 @@ def extract_products(page, html, max_results):
 
         if product_id in seen_ids:
             continue
+                            ##############debug##########
+        # price_match = re.match(r'(\$[\d.]+(?:\s+or\s+\d+\s+for\s+\$[\d.]+)?|\d+\s+for\s+\$[\d.]+)\s*-\s*(.+)', aria_label)
 
-        price_match = re.match(r'(\$[\d.]+(?:\s+or\s+\d+\s+for\s+\$[\d.]+)?|\d+\s+for\s+\$[\d.]+)\s*-\s*(.+)', aria_label)
+
+        price_match = re.match(r'(\$[\d.]+(?:\s+or\s+\d+\s+for\s+\$[\d.]+)?|\d+\s+for\s+\$[\d.]+(?:\s*/\s*[a-zA-Z\d\.]+)?|\$[\d.]+(?:\s*/\s*[a-zA-Z\d\.]+)?)\s*-\s*(.+)', aria_label)
+
         if not price_match:
             continue
 
