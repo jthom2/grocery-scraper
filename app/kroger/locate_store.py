@@ -16,6 +16,7 @@ def get_stores(zip_code, max_results=10):
         raise StoreNotFoundError(f"Status: {page.status} | URL: {page.url}")
 
     data = page.json()
+    print(data)
     stores_data = data.get('data', {}).get('stores', [])
 
     results = []
