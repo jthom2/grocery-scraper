@@ -18,6 +18,7 @@ def search(query, cookies=None, max_results=5):
 
     page = fetcher.fetch(url, params={'q': query}, cookies=cookies, headers=headers)
 
+
     # extract info hidden in __NEXT_DATA__ JSON
     next_data, data = get_next_data.get_next_data(page)
 
@@ -88,3 +89,5 @@ if __name__ == "__main__":
     query = input("Search Walmart for: ")
     results = search(query)
     display_results(results, query)
+
+
