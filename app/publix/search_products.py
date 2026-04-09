@@ -7,10 +7,7 @@ from app.publix.constants import BASE_URL, SEARCH_URL
 
 
 def search(query, store_id=None, max_results=15):
-    """
-    Searches Publix for a product query at a specific store.
-    Uses StealthyFetcher for JS rendering since Publix loads products dynamically.
-    """
+
     url = f"{SEARCH_URL}?searchTerm={urllib.parse.quote(query)}"
 
     cookies = None
@@ -29,11 +26,10 @@ def search(query, store_id=None, max_results=15):
 
 
 def extract_products(page, html, max_results):
-    """Extract product data from the rendered page. Only returns products with prices."""
+    
     products = []
 
-    # Extract products from aria-labels: "$X.XX - Product Name"
-    # Pattern: href="/pd/.../RIO-PCI-XXX..." aria-label="$X.XX - Name"
+
     seen_ids = set()
     for match in re.finditer(r'href="/pd/([^/]+)/(RIO-PCI-\d+)[^"]*"[^>]*aria-label="([^"]+)"', html):
         if len(products) >= max_results:
