@@ -1,16 +1,9 @@
-import sys
-from pathlib import Path
-
-# Add project root to sys.path to allow imports from app
-project_root = str(Path(__file__).resolve().parent.parent.parent)
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-##################################################################
 from urllib.parse import quote
 
-from app.utils import zip2loc, get_next_data, fetcher
+from app.utils import zip2loc, get_next_data, fetcher, store_selection
+from app.walmart.constants import STORE_DIRECTORY_URL
 
-# Look up nearby Walmart stores for a zip code.
+
 def find_stores(zip_code, max_stores=4):
     city, state = zip2loc.get_city_state(zip_code)
 
@@ -18,13 +11,11 @@ def find_stores(zip_code, max_stores=4):
         print(f"Error: Could not find location for zip code '{zip_code}'.")
         return []
 
-    url = f'https://www.walmart.com/store-directory/{quote(state)}/{quote(city)}'
+    url = f'{STORE_DIRECTORY_URL}/{quote(state)}/{quote(city)}'
     page = fetcher.fetch(url)
 
-    # extract info hidden in __NEXT_DATA__ JSON
     next_data, data = get_next_data.get_next_data(page)
 
-    # parses json data
     nearby_nodes = (
         data.get('props', {})
         .get('pageProps', {})
@@ -61,7 +52,7 @@ def find_stores(zip_code, max_stores=4):
     return stores
 
 
-def display_and_select(stores, zip_code):
+def display_stores(stores, zip_code):
     print(f"\n{'='*50}")
     print(f"Walmart Stores near {zip_code}")
     print(f"{'='*50}")
@@ -71,21 +62,7 @@ def display_and_select(stores, zip_code):
         print(f"   Store ID: {store['store_id']}")
         print(f"   Address: {store['address']}\n")
 
-    selection = input(f"Select a store (1-{len(stores)}): ")
-    try:
-        idx = int(selection) - 1
-        if 0 <= idx < len(stores):
-            selected = stores[idx]
-            print(f"\nSelected: {selected['name']} (ID: {selected['store_id']})")
-            return selected['store_id'], zip_code
-        else:
-            print("Invalid selection.")
-            return None, None
-    except ValueError:
-        print(f"Invalid input. Enter a number 1-{len(stores)}.")
-        return None, None
 
-# ask for zip → find stores → select one.
 def find_and_select_store():
     zip_code = input("Enter zip code: ")
     stores = find_stores(zip_code)
@@ -94,10 +71,16 @@ def find_and_select_store():
         print("No stores found.")
         return None, None
 
-    return display_and_select(stores, zip_code)
+    display_stores(stores, zip_code)
+    selected = store_selection.select_from_list(stores)
+
+    if selected:
+        print(f"\nSelected: {selected['name']} (ID: {selected['store_id']})")
+        return selected['store_id'], zip_code
+
+    return None, None
 
 
-# standalone entry point
 if __name__ == "__main__":
     store_id, zip_code = find_and_select_store()
     if store_id:

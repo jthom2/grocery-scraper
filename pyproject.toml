@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "scraper"
 version = "0.1.0"
@@ -11,3 +15,11 @@ dependencies = [
     "requests>=2.33.1",
     "scrapling[all]>=0.4.3",
 ]
+
+[project.scripts]
+walmart-search = "app.walmart.store_search:main"
+kroger-search = "app.kroger.store_search:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]

@@ -1,9 +1,9 @@
-from app.walmart import locate_store, search_products
-from app.utils import build_cookies
+from app.kroger import locate_store, search_products
+from app.utils import build_kroger_cookies
 
 
 def main():
-    query = input("Search Walmart for: ")
+    query = input("Search Kroger for: ")
 
     use_store = input("Search for a specific store? (y/n): ").strip().lower()
 
@@ -14,10 +14,10 @@ def main():
         if not store_id:
             print("Store selection failed. Searching with default location.")
         else:
-            cookies = build_cookies.build_location_cookies(store_id, zip_code)
+            cookies = build_kroger_cookies.build_location_cookies(store_id)
             print(f"\nSearching store {store_id} (ZIP {zip_code}) for '{query}'...")
 
-    results = search_products.search(query, cookies=cookies)
+    results = search_products.search(query, cookies)
     search_products.display_results(results, query)
 
 
