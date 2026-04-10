@@ -68,7 +68,10 @@ def display_stores(stores, zip_code):
         status = "OPEN" if store['is_open'] else "CLOSED"
         print(f"{i}. {store['name']}")
         print(f"   {store['address']}")
-        print(f"   {store['city']}, {store['state']} {store['postal_code']}")
+        city = store.get('city') or ''
+        state = store.get('state') or ''
+        postal_code = store.get('postal_code') or ''
+        print(f"   {city}, {state} {postal_code}".strip())
         print(f"   Phone: {store['phone']}")
         print(f"   Distance: {store['distance']} | {status} - {store['open_text']}")
         print(f"   Location ID: {store['location_id']}\n")

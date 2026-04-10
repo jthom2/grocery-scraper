@@ -65,7 +65,7 @@ def display_stores(stores, zip_code):
             print(f"   Phone: {store['phone']}")
         print(f"   Service: {store['service_type']}")
         location_code = store.get('metadata', {}).get('location_code')
-        print(f"   Shop ID: {store['location_id']} | Location Code: {location_code}\n")
+        print(f"   Location ID: {store['location_id']} | Location Code: {location_code}\n")
 
 
 def find_and_select_store():
@@ -96,4 +96,4 @@ if __name__ == "__main__":
         selected = store_selection.select_from_list(stores)
         if selected:
             print(f"\nSelected: {selected['name']}")
-            print(f"Shop ID: {selected['location_id']}")
+            print(f"Location ID: {selected['location_id']}")
