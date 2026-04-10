@@ -71,7 +71,9 @@ def display_stores(stores, zip_code):
         city = store.get('city') or ''
         state = store.get('state') or ''
         postal_code = store.get('postal_code') or ''
-        print(f"   {city}, {state} {postal_code}".strip())
+        city_state = ', '.join([part for part in (city, state) if part])
+        city_state_zip = ' '.join([part for part in (city_state, postal_code) if part]).strip()
+        print(f"   {city_state_zip}")
         print(f"   Phone: {store['phone']}")
         print(f"   Distance: {store['distance']} | {status} - {store['open_text']}")
         print(f"   Location ID: {store['location_id']}\n")

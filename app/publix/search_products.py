@@ -1,11 +1,14 @@
 import re
 import urllib.parse
+import logging
 
 from scrapling import StealthyFetcher
 from scrapling.fetchers import Fetcher
 
 from app.models import normalize_product
 from app.publix.constants import BASE_URL, SEARCH_URL
+
+logger = logging.getLogger(__name__)
 
 
 def search(query, location_id=None, max_results=15):
@@ -85,6 +88,7 @@ def extract_products(page, html, max_results, location_id=None):
             try:
                 parsed_price = float(numeric_match.group(1))
             except (TypeError, ValueError):
+                logger.warning("Failed to parse numeric Publix price from '%s'", price)
                 parsed_price = None
 
         products.append(normalize_product({

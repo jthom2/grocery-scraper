@@ -242,7 +242,7 @@ def parse_price(price_display):
     return float(match.group(1))
 
 
-def normalize_item(item, shop_id):
+def normalize_item(item, location_id):
     _get = item.get
 
     price_view = (_get('price') or {}).get('viewSection', {})
@@ -261,7 +261,7 @@ def normalize_item(item, shop_id):
 
     return normalize_product({
         'retailer': 'aldi',
-        'location_id': str(shop_id) if shop_id else None,
+        'location_id': str(location_id) if location_id else None,
         'product_id': _get('legacyId') or _get('productId'),
         'name': _get('name'),
         'brand': _get('brandName'),
@@ -309,17 +309,17 @@ def search(query, location_id=None, zip_code=None, max_results=5):
     if not token:
         return []
 
-    shop_id = location_id
-    if not shop_id:
-        shop_id = get_default_shop_id(zip_code, cookies, referer)
+    resolved_location_id = location_id
+    if not resolved_location_id:
+        resolved_location_id = get_default_shop_id(zip_code, cookies, referer)
 
-    if not shop_id:
+    if not resolved_location_id:
         return []
 
     placements = fetch_search_placements(
         query,
         zip_code,
-        shop_id,
+        resolved_location_id,
         token,
         cookies,
         referer,
@@ -336,7 +336,7 @@ def search(query, location_id=None, zip_code=None, max_results=5):
     batch_size = max(max_results * 2, 8)
     for offset in range(0, len(item_ids), batch_size):
         batch_ids = item_ids[offset: offset + batch_size]
-        items = fetch_items(batch_ids, shop_id, zip_code, cookies, referer)
+        items = fetch_items(batch_ids, resolved_location_id, zip_code, cookies, referer)
         if not items:
             continue
 
@@ -344,7 +344,7 @@ def search(query, location_id=None, zip_code=None, max_results=5):
             if not item.get('name'):
                 continue
 
-            results.append(normalize_item(item, shop_id))
+            results.append(normalize_item(item, resolved_location_id))
             if len(results) >= max_results:
                 return results
 
