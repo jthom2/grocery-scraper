@@ -2,22 +2,46 @@ import re
 import urllib.parse
 
 from scrapling import StealthyFetcher
+from scrapling.fetchers import Fetcher
 
 from app.publix.constants import BASE_URL, SEARCH_URL
 
 
 def search(query, store_id=None, max_results=15):
 
-    url = f"{SEARCH_URL}?searchTerm={urllib.parse.quote(query)}"
+    url = f"{SEARCH_URL}?searchTerm={urllib.parse.quote(query)}&facet=promoType%3A%3Atrue"
 
+    cookie_dict = None
     cookies = None
     if store_id:
+        cookie_dict = {'Store': f'{{"storeNumber":"{store_id}"}}'}
         cookies = [{'name': 'Store', 'value': f'{{"storeNumber":"{store_id}"}}', 'url': f'{BASE_URL}/'}]
 
-    fetcher = StealthyFetcher()
-    page = fetcher.fetch(url, cookies=cookies, headless=True) # debug:  , network_idle=True
+    # Use Fetcher with follow_redirects=False to get redirect URL
+    initial = Fetcher.get(url, cookies=cookie_dict, follow_redirects=False)
 
-    # Verify store context if requested
+    if initial.status in (301, 302, 303, 307, 308):
+        redirect_url = initial.headers.get('location', '')
+        if redirect_url and not redirect_url.startswith('http'):
+            redirect_url = f"{BASE_URL}{redirect_url}"
+
+        # Append facet after searchtermredirect
+        if "searchtermredirect=" in redirect_url and "facet=" not in redirect_url:
+            redirect_url = re.sub(
+                r'(searchtermredirect=[^&]+)',
+                r'\1&facet=promoType%3A%3Atrue',
+                redirect_url
+            )
+        elif "facet=" not in redirect_url:
+            separator = "&" if "?" in redirect_url else "?"
+            redirect_url = f"{redirect_url}{separator}facet=promoType%3A%3Atrue"
+
+        fetcher = StealthyFetcher()
+        page = fetcher.fetch(redirect_url, cookies=cookies, headless=True)
+    else:
+        fetcher = StealthyFetcher()
+        page = fetcher.fetch(url, cookies=cookies, headless=True)
+
     html = str(page.body)
     if store_id and f'"current_store": "{store_id}"' not in html:
         print("WARNING: Store context may not have persisted through redirects.")
