@@ -79,6 +79,8 @@ def extract_products(page, html, max_results, location_id=None):
         price = price_match.group(1)
         name = price_match.group(2).strip()
         brand = name.split()[0] if name else None
+        numeric_match = re.search(r'\$([0-9]+(?:\.[0-9]+)?)', price)
+        parsed_price = float(numeric_match.group(1)) if numeric_match else None
 
         products.append(normalize_product({
             'retailer': 'publix',
@@ -87,13 +89,14 @@ def extract_products(page, html, max_results, location_id=None):
             'name': name,
             'brand': brand,
             'size': None,
-            'price': None,
+            'price': parsed_price,
             'price_display': price,
             'unit_price': None,
             'promo_price': None,
             'image_url': None,
             'in_stock': True,
             'url': f"{BASE_URL}/pd/{name_slug}/{product_id}",
+            'metadata': {'raw_price_text': price},
         }))
 
     return products

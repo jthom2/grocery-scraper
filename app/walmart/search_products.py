@@ -30,6 +30,7 @@ def search(query, cookies=None, location_id=None, max_results=5):
                 is_in_store = any(str(f.get('storeId')) == str(store_id) for f in fulfillment_opts)
                 if not is_in_store:
                     continue
+            cookie_store_id = str(cookies.get('assortmentStoreId')) if cookies and cookies.get('assortmentStoreId') else None
 
             _get = item.get
             rating_data = _get('rating') or {}
@@ -44,7 +45,7 @@ def search(query, cookies=None, location_id=None, max_results=5):
             results.append(normalize_product({
                 'retailer': 'walmart',
                 'product_id': _get('usItemId'),
-                'location_id': str(location_id) if location_id else (str(store_id) if cookies and (store_id := cookies.get('assortmentStoreId')) else None),
+                'location_id': str(location_id) if location_id else cookie_store_id,
                 'name': name,
                 'brand': _get('brand'),
                 'size': _get('salesUnit'),
