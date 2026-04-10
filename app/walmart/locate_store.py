@@ -1,5 +1,6 @@
 from urllib.parse import quote
 
+from app.models import normalize_location
 from app.utils import zip2loc, get_next_data, fetcher, store_selection
 from app.walmart.constants import STORE_DIRECTORY_URL
 
@@ -40,14 +41,20 @@ def find_stores(zip_code, max_stores=4):
         addr_zip = address_info.get('postalCode', '')
 
         address_str = f"{addr_line_1}, {addr_city}, {addr_state} {addr_zip}".strip(", ")
-        store_id = node.get('id', 'N/A')
+        store_id = str(node.get('id', 'N/A'))
 
-        stores.append({
+        stores.append(normalize_location({
+            'retailer': 'walmart',
+            'location_id': store_id,
             'name': name,
-            'store_id': store_id,
-            'address': address_str,
-            'address_info': address_info,
-        })
+            'address': address_str or None,
+            'city': addr_city or None,
+            'state': addr_state or None,
+            'postal_code': addr_zip or None,
+            'metadata': {
+                'address_info': address_info,
+            },
+        }))
 
     return stores
 
@@ -59,7 +66,7 @@ def display_stores(stores, zip_code):
 
     for i, store in enumerate(stores, start=1):
         print(f"{i}. {store['name']}")
-        print(f"   Store ID: {store['store_id']}")
+        print(f"   Location ID: {store['location_id']}")
         print(f"   Address: {store['address']}\n")
 
 
@@ -75,8 +82,8 @@ def find_and_select_store():
     selected = store_selection.select_from_list(stores)
 
     if selected:
-        print(f"\nSelected: {selected['name']} (ID: {selected['store_id']})")
-        return selected['store_id'], zip_code
+        print(f"\nSelected: {selected['name']} (ID: {selected['location_id']})")
+        return selected['location_id'], zip_code
 
     return None, None
 

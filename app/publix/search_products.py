@@ -4,18 +4,19 @@ import urllib.parse
 from scrapling import StealthyFetcher
 from scrapling.fetchers import Fetcher
 
+from app.models import normalize_product
 from app.publix.constants import BASE_URL, SEARCH_URL
 
 
-def search(query, store_id=None, max_results=15):
+def search(query, location_id=None, max_results=15):
 
     url = f"{SEARCH_URL}?searchTerm={urllib.parse.quote(query)}&facet=promoType%3A%3Atrue"
 
     cookie_dict = None
     cookies = None
-    if store_id:
-        cookie_dict = {'Store': f'{{"storeNumber":"{store_id}"}}'}
-        cookies = [{'name': 'Store', 'value': f'{{"storeNumber":"{store_id}"}}', 'url': f'{BASE_URL}/'}]
+    if location_id:
+        cookie_dict = {'Store': f'{{"storeNumber":"{location_id}"}}'}
+        cookies = [{'name': 'Store', 'value': f'{{"storeNumber":"{location_id}"}}', 'url': f'{BASE_URL}/'}]
 
     # Use Fetcher with follow_redirects=False to get redirect URL
     initial = Fetcher.get(url, cookies=cookie_dict, follow_redirects=False)
@@ -43,13 +44,13 @@ def search(query, store_id=None, max_results=15):
         page = fetcher.fetch(url, cookies=cookies, headless=True)
 
     html = str(page.body)
-    if store_id and f'"current_store": "{store_id}"' not in html:
+    if location_id and f'"current_store": "{location_id}"' not in html:
         print("WARNING: Store context may not have persisted through redirects.")
 
-    return extract_products(page, html, max_results)
+    return extract_products(page, html, max_results, location_id)
 
 
-def extract_products(page, html, max_results):
+def extract_products(page, html, max_results, location_id=None):
     
     products = []
 
@@ -79,19 +80,21 @@ def extract_products(page, html, max_results):
         name = price_match.group(2).strip()
         brand = name.split()[0] if name else None
 
-        products.append({
+        products.append(normalize_product({
+            'retailer': 'publix',
+            'product_id': product_id,
+            'location_id': str(location_id) if location_id else None,
             'name': name,
             'brand': brand,
             'size': None,
-            'price': price,
+            'price': None,
             'price_display': price,
             'unit_price': None,
             'promo_price': None,
-            'image': None,
+            'image_url': None,
             'in_stock': True,
-            'upc': product_id,
             'url': f"{BASE_URL}/pd/{name_slug}/{product_id}",
-        })
+        }))
 
     return products
 

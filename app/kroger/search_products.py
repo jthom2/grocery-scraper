@@ -1,6 +1,7 @@
 import re
 import json
 
+from app.models import normalize_product
 from app.utils import fetcher
 from app.kroger.constants import REFERER, SEARCH_URL, BASE_URL
 
@@ -29,7 +30,7 @@ def get_front_image(images, size='large'):
     return None
 
 
-def search(query, cookies=None, max_results=5):
+def search(query, cookies=None, location_id=None, max_results=5):
     headers = {"Referer": REFERER}
     params = {'query': query, 'searchType': 'default_search'}
 
@@ -54,7 +55,10 @@ def search(query, cookies=None, max_results=5):
         locations = inventory.get('locations', [])
         stock_level = locations[0].get('stockLevel') if locations else None
 
-        results.append({
+        results.append(normalize_product({
+            'retailer': 'kroger',
+            'product_id': product.get('id'),
+            'location_id': str(location_id) if location_id else None,
             'name': item.get('description'),
             'brand': (item.get('brand') or {}).get('name'),
             'size': item.get('customerFacingSize'),
@@ -64,12 +68,12 @@ def search(query, cookies=None, max_results=5):
             'promo_price': promo.get('defaultDescription') if promo else None,
             'rating': ratings.get('averageRating'),
             'reviews': ratings.get('numberOfReviews'),
-            'image': get_front_image(item.get('images')),
+            'image_url': get_front_image(item.get('images')),
             'in_stock': stock_level in ('HIGH', 'LOW', 'MEDIUM') if stock_level else None,
             'stock_level': stock_level,
-            'upc': product.get('id'),
+            'availability': stock_level,
             'url': f"{BASE_URL}/p/{item.get('seoDescription')}/{product.get('id')}",
-        })
+        }))
 
     return results
 

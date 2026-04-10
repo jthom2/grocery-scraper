@@ -6,17 +6,17 @@ def main():
 
     use_store = input("Search for a specific store? (y/n): ").strip().lower()
 
-    shop_id = None
+    location_id = None
     zip_code = None
     if use_store == 'y':
-        shop_id, zip_code = locate_store.find_and_select_store()
+        location_id, zip_code = locate_store.find_and_select_store()
 
-        if not shop_id:
+        if not location_id:
             print("Store selection failed. Searching with default location.")
         else:
-            print(f"\nSearching store {shop_id} (ZIP {zip_code}) for '{query}'...")
+            print(f"\nSearching store {location_id} (ZIP {zip_code}) for '{query}'...")
 
-    results = search_products.search(query, shop_id=shop_id, zip_code=zip_code)
+    results = search_products.search(query, location_id=location_id, zip_code=zip_code)
     search_products.display_results(results, query)
 
 

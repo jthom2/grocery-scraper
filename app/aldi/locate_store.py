@@ -1,3 +1,4 @@
+from app.models import normalize_location
 from app.utils import fetcher, store_selection
 from app.aldi.constants import STORE_FRONT_URL, IDP_SHOPS_URL
 
@@ -33,16 +34,21 @@ def get_stores(zip_code, max_results=10):
         address_line = f"{street}, {city}, {state} {postal}".strip(", ")
         city_state_zip = f"{city}, {state} {postal}".strip(", ")
 
-        stores.append({
+        stores.append(normalize_location({
+            'retailer': 'aldi',
             'name': _get('location_name') or _get('name') or 'ALDI',
-            'shop_id': str(_get('id')),
-            'store_id': str(_get('id')),
-            'address': address_line,
-            'city_state_zip': city_state_zip,
+            'location_id': str(_get('id')),
+            'address': address_line or None,
+            'city': city or None,
+            'state': state or None,
+            'postal_code': postal or None,
             'phone': _get('phone_number'),
             'service_type': _get('fulfillment_option'),
-            'location_code': _get('location_code'),
-        })
+            'metadata': {
+                'location_code': _get('location_code'),
+                'city_state_zip': city_state_zip,
+            },
+        }))
 
     return stores
 
@@ -58,7 +64,8 @@ def display_stores(stores, zip_code):
         if store['phone']:
             print(f"   Phone: {store['phone']}")
         print(f"   Service: {store['service_type']}")
-        print(f"   Shop ID: {store['shop_id']} | Location Code: {store['location_code']}\n")
+        location_code = store.get('metadata', {}).get('location_code')
+        print(f"   Shop ID: {store['location_id']} | Location Code: {location_code}\n")
 
 
 def find_and_select_store():
@@ -73,7 +80,7 @@ def find_and_select_store():
     selected = store_selection.select_from_list(stores)
 
     if selected:
-        return selected['shop_id'], zip_code
+        return selected['location_id'], zip_code
 
     return None, None
 
@@ -89,4 +96,4 @@ if __name__ == "__main__":
         selected = store_selection.select_from_list(stores)
         if selected:
             print(f"\nSelected: {selected['name']}")
-            print(f"Shop ID: {selected['shop_id']}")
+            print(f"Shop ID: {selected['location_id']}")

@@ -1,3 +1,4 @@
+from app.models import normalize_location
 from app.utils import fetcher, store_selection
 from app.kroger.constants import REFERER, STORE_LOCATOR_URL
 
@@ -31,23 +32,29 @@ def get_stores(zip_code, max_results=10):
         full_address = ', '.join(address_lines) if address_lines else ''
         city_state_zip = f"{address.get('cityTown', '')}, {address.get('stateProvince', '')} {address.get('postalCode', '')}"
 
-        results.append({
-            'name': store.get('vanityName'),
-            'brand': brand,
-            'location_id': store.get('locationId'),
-            'store_number': store.get('storeNumber'),
-            'division': store.get('loyaltyDivisionNumber'),
-            'address': full_address,
-            'city_state_zip': city_state_zip,
+        results.append(normalize_location({
+            'retailer': 'kroger',
+            'name': store.get('vanityName') or 'Kroger',
+            'location_id': str(store.get('locationId')),
+            'address': full_address or None,
+            'city': address.get('cityTown'),
+            'state': address.get('stateProvince'),
+            'postal_code': address.get('postalCode'),
             'phone': phone.get('pretty'),
             'distance': distance.get('pretty'),
             'is_open': store.get('isOpen'),
             'open_text': store.get('openText'),
-            'hours': store.get('prettyHours', []),
-            'lat': location.get('lat'),
-            'lng': location.get('lng'),
-            'departments': [d.get('vanityName') for d in store.get('departments', [])],
-        })
+            'latitude': location.get('lat'),
+            'longitude': location.get('lng'),
+            'metadata': {
+                'brand': brand,
+                'store_number': store.get('storeNumber'),
+                'division': store.get('loyaltyDivisionNumber'),
+                'hours': store.get('prettyHours', []),
+                'departments': [d.get('vanityName') for d in store.get('departments', [])],
+                'city_state_zip': city_state_zip,
+            },
+        }))
 
     return results
 
@@ -61,7 +68,7 @@ def display_stores(stores, zip_code):
         status = "OPEN" if store['is_open'] else "CLOSED"
         print(f"{i}. {store['name']}")
         print(f"   {store['address']}")
-        print(f"   {store['city_state_zip']}")
+        print(f"   {store['city']}, {store['state']} {store['postal_code']}")
         print(f"   Phone: {store['phone']}")
         print(f"   Distance: {store['distance']} | {status} - {store['open_text']}")
         print(f"   Location ID: {store['location_id']}\n")
@@ -71,7 +78,7 @@ def find_and_select_store():
     zip_code = input("ZIP: ")
     stores = get_stores(zip_code)
 
-    kroger_stores = [s for s in stores if s['brand'] == 'KROGER']
+    kroger_stores = [s for s in stores if s.get('metadata', {}).get('brand') == 'KROGER']
 
     if not kroger_stores:
         print("No Kroger stores found.")
@@ -89,7 +96,7 @@ def find_and_select_store():
 if __name__ == "__main__":
     zip_code = input("Enter zip code: ")
     stores = get_stores(zip_code)
-    kroger_stores = [s for s in stores if s['brand'] == 'KROGER']
+    kroger_stores = [s for s in stores if s.get('metadata', {}).get('brand') == 'KROGER']
 
     if not kroger_stores:
         print("No Kroger stores found.")

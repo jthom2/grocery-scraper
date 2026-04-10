@@ -2,6 +2,7 @@ import json
 import re
 import uuid
 
+from app.models import normalize_product
 from app.utils import fetcher
 from app.aldi.constants import (
     BASE_URL,
@@ -241,7 +242,7 @@ def parse_price(price_display):
     return float(match.group(1))
 
 
-def normalize_item(item):
+def normalize_item(item, shop_id):
     _get = item.get
 
     price_view = (_get('price') or {}).get('viewSection', {})
@@ -258,7 +259,10 @@ def normalize_item(item):
     was_price = item_card.get('fullPriceString') or item_details.get('fullPriceString')
     evergreen_url = _get('evergreenUrl')
 
-    return {
+    return normalize_product({
+        'retailer': 'aldi',
+        'location_id': str(shop_id) if shop_id else None,
+        'product_id': _get('legacyId') or _get('productId'),
         'name': _get('name'),
         'brand': _get('brandName'),
         'size': _get('size'),
@@ -269,16 +273,15 @@ def normalize_item(item):
         'was_price': was_price,
         'rating': rating_data.get('averageStarRating') or rating_data.get('averageRating'),
         'reviews': rating_data.get('ratingCount') or rating_data.get('numberOfRatings'),
-        'image': image,
+        'image_url': image,
         'in_stock': availability.get('available'),
         'stock_level': availability.get('stockLevel'),
         'availability': availability_view.get('stockLevelLabelString'),
-        'upc': _get('legacyId') or _get('productId'),
         'url': f"{BASE_URL}/store/aldi/products/{evergreen_url}" if evergreen_url else None,
-    }
+    })
 
 
-def search(query, shop_id=None, zip_code=None, max_results=5):
+def search(query, location_id=None, zip_code=None, max_results=5):
     if max_results <= 0:
         return []
 
@@ -306,6 +309,7 @@ def search(query, shop_id=None, zip_code=None, max_results=5):
     if not token:
         return []
 
+    shop_id = location_id
     if not shop_id:
         shop_id = get_default_shop_id(zip_code, cookies, referer)
 
@@ -340,7 +344,7 @@ def search(query, shop_id=None, zip_code=None, max_results=5):
             if not item.get('name'):
                 continue
 
-            results.append(normalize_item(item))
+            results.append(normalize_item(item, shop_id))
             if len(results) >= max_results:
                 return results
 
