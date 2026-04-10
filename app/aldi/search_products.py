@@ -279,6 +279,9 @@ def normalize_item(item):
 
 
 def search(query, shop_id=None, zip_code=None, max_results=5):
+    if max_results <= 0:
+        return []
+
     search_page = fetcher.fetch(SEARCH_URL, params={'k': query})
     cookies = search_page.cookies
     referer = str(search_page.url)
@@ -321,22 +324,25 @@ def search(query, shop_id=None, zip_code=None, max_results=5):
     if not placements:
         return []
 
-    item_ids = extract_item_ids(placements, max_ids=max(max_results * 12, 40))
+    item_ids = extract_item_ids(placements, max_ids=max(max_results * 8, 24))
     if not item_ids:
         return []
 
-    items = fetch_items(item_ids, shop_id, zip_code, cookies, referer)
-    if not items:
-        return []
-
     results = []
-    for item in items:
-        if not item.get('name'):
+    batch_size = max(max_results * 2, 8)
+    for offset in range(0, len(item_ids), batch_size):
+        batch_ids = item_ids[offset: offset + batch_size]
+        items = fetch_items(batch_ids, shop_id, zip_code, cookies, referer)
+        if not items:
             continue
 
-        results.append(normalize_item(item))
-        if len(results) >= max_results:
-            break
+        for item in items:
+            if not item.get('name'):
+                continue
+
+            results.append(normalize_item(item))
+            if len(results) >= max_results:
+                return results
 
     return results
 

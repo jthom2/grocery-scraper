@@ -8,7 +8,7 @@ class StoreNotFoundError(Exception):
 
 def get_stores(zip_code, max_results=10):
     headers = {"Referer": f"{REFERER}stores/search"}
-    params = {'filter.query': zip_code, 'projections': 'full'}
+    params = {'filter.query': zip_code, 'projections': 'compact'}
 
     page = fetcher.fetch(STORE_LOCATOR_URL, params=params, headers=headers)
 
@@ -16,11 +16,11 @@ def get_stores(zip_code, max_results=10):
         raise StoreNotFoundError(f"Status: {page.status} | URL: {page.url}")
 
     data = page.json()
-    print(data)
     stores_data = data.get('data', {}).get('stores', [])
 
     results = []
     for store in stores_data[:max_results]:
+        brand = (store.get('brand') or store.get('banner') or '').upper()
         locale = store.get('locale', {})
         address = locale.get('address', {})
         location = locale.get('location', {})
@@ -33,7 +33,7 @@ def get_stores(zip_code, max_results=10):
 
         results.append({
             'name': store.get('vanityName'),
-            'brand': store.get('brand'),
+            'brand': brand,
             'location_id': store.get('locationId'),
             'store_number': store.get('storeNumber'),
             'division': store.get('loyaltyDivisionNumber'),

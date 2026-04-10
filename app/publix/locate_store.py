@@ -15,9 +15,10 @@ def display_stores(stores, zip_code):
 
 
 def fetch_stores(zip_code, max_results=4):
+    request_count = max(1, int(max_results))
     params = {
         'types': 'R,G,H,N,S',
-        'count': '30',
+        'count': str(request_count),
         'distance': '50',
         'includeOpenAndCloseDates': 'true',
         'zip': zip_code,
@@ -30,7 +31,7 @@ def fetch_stores(zip_code, max_results=4):
     stores_data = data.get('stores', [])
 
     results = []
-    for store in stores_data[:max_results]:
+    for store in stores_data[:request_count]:
         _get = store.get
         address = _get('address', {})
         results.append({
@@ -57,6 +58,9 @@ def find_and_select_store():
 
     display_stores(stores, zip_code)
     selected = store_selection.select_from_list(stores)
+    if not selected:
+        return None, zip_code
+
     return selected['id'], zip_code
 
 
