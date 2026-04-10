@@ -68,11 +68,7 @@ def display_stores(stores, zip_code):
         status = "OPEN" if store['is_open'] else "CLOSED"
         print(f"{i}. {store['name']}")
         print(f"   {store['address']}")
-        city = store.get('city') or ''
-        state = store.get('state') or ''
-        postal_code = store.get('postal_code') or ''
-        city_state = ', '.join([part for part in (city, state) if part])
-        city_state_zip = ' '.join([part for part in (city_state, postal_code) if part]).strip()
+        city_state_zip = store.get('metadata', {}).get('city_state_zip', '')
         print(f"   {city_state_zip}")
         print(f"   Phone: {store['phone']}")
         print(f"   Distance: {store['distance']} | {status} - {store['open_text']}")

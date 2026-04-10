@@ -31,7 +31,10 @@ class NormalizedLocation(NormalizedBaseModel):
 
 class NormalizedProduct(NormalizedBaseModel):
     retailer: str
-    product_id: str | None = None
+    product_id: str | None = Field(
+        default=None,
+        description="Retailer-specific product identifier; optional when source data omits a stable ID.",
+    )
     location_id: str | None = None
     name: str
     brand: str | None = None

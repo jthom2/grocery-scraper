@@ -87,7 +87,7 @@ def extract_products(page, html, max_results, location_id=None):
         if numeric_match:
             try:
                 parsed_price = float(numeric_match.group(1))
-            except (TypeError, ValueError):
+            except ValueError:
                 logger.warning("Failed to parse numeric Publix price from '%s'", price)
                 parsed_price = None
 
