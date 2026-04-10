@@ -1,0 +1,15 @@
+BASE_URL = "https://www.aldi.us"
+REFERER = f"{BASE_URL}/"
+STORE_FRONT_URL = f"{BASE_URL}/store/aldi/storefront"
+SEARCH_URL = f"{BASE_URL}/store/aldi/s"
+GRAPHQL_URL = f"{BASE_URL}/graphql"
+IDP_SHOPS_URL = f"{BASE_URL}/idp/v1/shops"
+IDP_LOCATION_URL = f"{BASE_URL}/idp/v1/users/self/location"
+ZIP_LOOKUP_URL = "https://api.zippopotam.us/us"
+
+RETAILER_SLUG = "aldi"
+DEFAULT_ZONE_ID = "1008"
+
+SHOP_COLLECTION_SCOPED_HASH = "c6a0fcb3d1a4a14e5800cc6c38e736e85177f80f0c01a5535646f83238e65bcb"
+SEARCH_RESULTS_PLACEMENTS_HASH = "d03d28d030292630382be8a4ecda3c7ab907977c9fbb0a115571699f8c3c1fbb"
+ITEMS_HASH = "5116339819ff07f207fd38f949a8a7f58e52cc62223b535405b087e3076ebf2f"
