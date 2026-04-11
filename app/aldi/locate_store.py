@@ -2,6 +2,7 @@ from app.models import normalize_location
 from app.utils import fetcher, store_selection
 from app.aldi.constants import STORE_FRONT_URL, IDP_SHOPS_URL
 
+#       alt url 'https://info.aldi.us/stores/l/al/auburn'
 
 def get_stores(zip_code, max_results=10):
     entry = fetcher.fetch(STORE_FRONT_URL)
