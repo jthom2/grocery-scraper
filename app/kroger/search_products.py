@@ -1,13 +1,25 @@
 import re
 import json
+import urllib.parse
+
+from scrapling import StealthyFetcher
 
 from app.models import normalize_product
-from app.utils import fetcher
-from app.kroger.constants import REFERER, SEARCH_URL, BASE_URL
+from app.kroger.constants import SEARCH_URL, BASE_URL
 
 
 class KrogerDataNotFoundError(Exception):
     pass
+
+
+def _dict_cookies_to_playwright(cookies_dict):
+    """Convert a plain {name: value} cookie dict to Playwright list format."""
+    if not cookies_dict:
+        return None
+    return [
+        {'name': name, 'value': str(value), 'url': f'{BASE_URL}/'}
+        for name, value in cookies_dict.items()
+    ]
 
 
 def extract_initial_state(page):
@@ -31,10 +43,13 @@ def get_front_image(images, size='large'):
 
 
 def search(query, cookies=None, location_id=None, max_results=5):
-    headers = {"Referer": REFERER}
     params = {'query': query, 'searchType': 'default_search'}
+    url = f"{SEARCH_URL}?{urllib.parse.urlencode(params)}"
 
-    page = fetcher.fetch(SEARCH_URL, params=params, cookies=cookies, headers=headers)
+    playwright_cookies = _dict_cookies_to_playwright(cookies) if isinstance(cookies, dict) else cookies
+
+    sf = StealthyFetcher()
+    page = sf.fetch(url, cookies=playwright_cookies, headless=True)
 
     state = extract_initial_state(page)
 
