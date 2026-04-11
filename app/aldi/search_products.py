@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 import json
 import re
 import uuid
@@ -17,6 +18,38 @@ from app.aldi.constants import (
     SEARCH_RESULTS_PLACEMENTS_HASH,
     ITEMS_HASH,
 )
+
+
+ITEM_ID_PATTERN = re.compile(r'^items_[0-9]+-[0-9]+$')
+PRICE_PATTERN = re.compile(r"\$([0-9]+(?:\.[0-9]+)?)")
+
+
+def run_persisted_query(operation_name, variables, query_hash, cookies, referer):
+    params = {
+        'operationName': operation_name,
+        'variables': json.dumps(variables, separators=(',', ':')),
+        'extensions': json.dumps({
+            'persistedQuery': {
+                'version': 1,
+                'sha256Hash': query_hash,
+            }
+        }, separators=(',', ':')),
+    }
+
+    page = fetcher.fetch(
+        GRAPHQL_URL,
+        params=params,
+        cookies=cookies,
+        headers={"Referer": referer},
+    )
+    if page.status != 200:
+        return None
+
+    payload = page.json()
+    if payload.get('errors'):
+        return None
+
+    return payload.get('data') or {}
 
 
 def get_coordinates(zip_code):
@@ -52,41 +85,24 @@ def get_default_zip(cookies, referer):
 
 
 def get_retailer_inventory_session_token(zip_code, latitude, longitude, cookies, referer):
-    variables = {
-        'retailerSlug': RETAILER_SLUG,
-        'postalCode': zip_code,
-        'coordinates': {'latitude': latitude, 'longitude': longitude},
-        'addressId': None,
-        'allowCanonicalFallback': True,
-    }
-    extensions = {
-        'persistedQuery': {
-            'version': 1,
-            'sha256Hash': SHOP_COLLECTION_SCOPED_HASH,
-        }
-    }
-    params = {
-        'operationName': 'ShopCollectionScoped',
-        'variables': json.dumps(variables, separators=(',', ':')),
-        'extensions': json.dumps(extensions, separators=(',', ':')),
-    }
-
-    page = fetcher.fetch(
-        GRAPHQL_URL,
-        params=params,
+    data = run_persisted_query(
+        operation_name='ShopCollectionScoped',
+        variables={
+            'retailerSlug': RETAILER_SLUG,
+            'postalCode': zip_code,
+            'coordinates': {'latitude': latitude, 'longitude': longitude},
+            'addressId': None,
+            'allowCanonicalFallback': True,
+        },
+        query_hash=SHOP_COLLECTION_SCOPED_HASH,
         cookies=cookies,
-        headers={"Referer": referer},
+        referer=referer,
     )
-
-    if page.status != 200:
-        return None
-
-    data = page.json()
-    if data.get('errors'):
+    if not data:
         return None
 
     shops = (
-        data.get('data', {})
+        data
         .get('shopCollection', {})
         .get('shops', [])
     )
@@ -116,55 +132,38 @@ def get_default_shop_id(zip_code, cookies, referer):
 
 
 def fetch_search_placements(query, zip_code, shop_id, token, cookies, referer, max_results=5):
-    variables = {
-        'filters': [],
-        'action': None,
-        'query': query,
-        'pageViewId': str(uuid.uuid4()),
-        'retailerInventorySessionToken': token,
-        'elevatedProductId': None,
-        'searchSource': 'search',
-        'disableReformulation': False,
-        'disableLlm': False,
-        'forceInspiration': False,
-        'orderBy': 'bestMatch',
-        'clusterId': None,
-        'includeDebugInfo': False,
-        'clusteringStrategy': None,
-        'contentManagementSearchParams': {'itemGridColumnCount': 3},
-        'shopId': str(shop_id),
-        'postalCode': zip_code,
-        'zoneId': DEFAULT_ZONE_ID,
-        'first': max(max_results, 4),
-    }
-    extensions = {
-        'persistedQuery': {
-            'version': 1,
-            'sha256Hash': SEARCH_RESULTS_PLACEMENTS_HASH,
-        }
-    }
-    params = {
-        'operationName': 'SearchResultsPlacements',
-        'variables': json.dumps(variables, separators=(',', ':')),
-        'extensions': json.dumps(extensions, separators=(',', ':')),
-    }
-
-    page = fetcher.fetch(
-        GRAPHQL_URL,
-        params=params,
+    data = run_persisted_query(
+        operation_name='SearchResultsPlacements',
+        variables={
+            'filters': [],
+            'action': None,
+            'query': query,
+            'pageViewId': str(uuid.uuid4()),
+            'retailerInventorySessionToken': token,
+            'elevatedProductId': None,
+            'searchSource': 'search',
+            'disableReformulation': False,
+            'disableLlm': False,
+            'forceInspiration': False,
+            'orderBy': 'bestMatch',
+            'clusterId': None,
+            'includeDebugInfo': False,
+            'clusteringStrategy': None,
+            'contentManagementSearchParams': {'itemGridColumnCount': 3},
+            'shopId': str(shop_id),
+            'postalCode': zip_code,
+            'zoneId': DEFAULT_ZONE_ID,
+            'first': max(max_results, 4),
+        },
+        query_hash=SEARCH_RESULTS_PLACEMENTS_HASH,
         cookies=cookies,
-        headers={"Referer": referer},
+        referer=referer,
     )
-
-    if page.status != 200:
-        return []
-
-    data = page.json()
-    if data.get('errors'):
+    if not data:
         return []
 
     return (
-        data.get('data', {})
+        data
         .get('searchResultsPlacements', {})
         .get('placements', [])
     )
@@ -172,7 +171,7 @@ def fetch_search_placements(query, zip_code, shop_id, token, cookies, referer, m
 
 def extract_item_ids(placements, max_ids=40):
     item_ids = []
-    item_id_pattern = re.compile(r'^items_[0-9]+-[0-9]+$')
+    seen_ids = set()
 
     def walk(value):
         if len(item_ids) >= max_ids:
@@ -188,58 +187,85 @@ def extract_item_ids(placements, max_ids=40):
                 walk(nested)
             return
 
-        if isinstance(value, str) and item_id_pattern.match(value) and value not in item_ids:
+        if isinstance(value, str) and ITEM_ID_PATTERN.match(value) and value not in seen_ids:
             item_ids.append(value)
+            seen_ids.add(value)
 
     walk(placements)
     return item_ids
 
 
 def fetch_items(item_ids, shop_id, zip_code, cookies, referer):
-    variables = {
-        'ids': item_ids,
-        'shopId': str(shop_id),
-        'zoneId': DEFAULT_ZONE_ID,
-        'postalCode': zip_code,
-    }
-    extensions = {
-        'persistedQuery': {
-            'version': 1,
-            'sha256Hash': ITEMS_HASH,
-        }
-    }
-    params = {
-        'operationName': 'Items',
-        'variables': json.dumps(variables, separators=(',', ':')),
-        'extensions': json.dumps(extensions, separators=(',', ':')),
-    }
-
-    page = fetcher.fetch(
-        GRAPHQL_URL,
-        params=params,
+    data = run_persisted_query(
+        operation_name='Items',
+        variables={
+            'ids': item_ids,
+            'shopId': str(shop_id),
+            'zoneId': DEFAULT_ZONE_ID,
+            'postalCode': zip_code,
+        },
+        query_hash=ITEMS_HASH,
         cookies=cookies,
-        headers={"Referer": referer},
+        referer=referer,
     )
-
-    if page.status != 200:
+    if not data:
         return []
 
-    data = page.json()
-    if data.get('errors'):
-        return []
-
-    return data.get('data', {}).get('items', [])
+    return data.get('items', [])
 
 
 def parse_price(price_display):
     if not price_display:
         return None
 
-    match = re.search(r"\$([0-9]+(?:\.[0-9]+)?)", price_display)
+    match = PRICE_PATTERN.search(price_display)
     if not match:
         return None
 
     return float(match.group(1))
+
+
+def build_search_context(query, location_id=None, zip_code=None):
+    search_page = fetcher.fetch(SEARCH_URL, params={'k': query})
+    cookies = search_page.cookies
+    referer = str(search_page.url)
+
+    resolved_zip = zip_code or get_default_zip(cookies, referer)
+    if not resolved_zip:
+        return None
+
+    default_shop_future = None
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        coordinates_future = executor.submit(get_coordinates, resolved_zip)
+        if not location_id:
+            # Keep dedicated default-shop lookup: token shops and IDP shops can diverge by ZIP.
+            default_shop_future = executor.submit(get_default_shop_id, resolved_zip, cookies, referer)
+
+        latitude, longitude = coordinates_future.result()
+        if latitude is None or longitude is None:
+            return None
+
+        token = get_retailer_inventory_session_token(
+            resolved_zip,
+            latitude,
+            longitude,
+            cookies,
+            referer,
+        )
+        if not token:
+            return None
+
+        resolved_location_id = str(location_id) if location_id else default_shop_future.result()
+    if not resolved_location_id:
+        return None
+
+    return {
+        'cookies': cookies,
+        'referer': referer,
+        'zip_code': resolved_zip,
+        'location_id': resolved_location_id,
+        'token': token,
+    }
 
 
 def normalize_item(item, location_id):
@@ -285,44 +311,17 @@ def search(query, location_id=None, zip_code=None, max_results=5):
     if max_results <= 0:
         return []
 
-    search_page = fetcher.fetch(SEARCH_URL, params={'k': query})
-    cookies = search_page.cookies
-    referer = str(search_page.url)
-
-    if not zip_code:
-        zip_code = get_default_zip(cookies, referer)
-
-    if not zip_code:
-        return []
-
-    latitude, longitude = get_coordinates(zip_code)
-    if latitude is None or longitude is None:
-        return []
-
-    token = get_retailer_inventory_session_token(
-        zip_code,
-        latitude,
-        longitude,
-        cookies,
-        referer,
-    )
-    if not token:
-        return []
-
-    resolved_location_id = location_id
-    if not resolved_location_id:
-        resolved_location_id = get_default_shop_id(zip_code, cookies, referer)
-
-    if not resolved_location_id:
+    search_context = build_search_context(query, location_id=location_id, zip_code=zip_code)
+    if not search_context:
         return []
 
     placements = fetch_search_placements(
         query,
-        zip_code,
-        resolved_location_id,
-        token,
-        cookies,
-        referer,
+        search_context['zip_code'],
+        search_context['location_id'],
+        search_context['token'],
+        search_context['cookies'],
+        search_context['referer'],
         max_results=max_results,
     )
     if not placements:
@@ -336,7 +335,13 @@ def search(query, location_id=None, zip_code=None, max_results=5):
     batch_size = max(max_results * 2, 8)
     for offset in range(0, len(item_ids), batch_size):
         batch_ids = item_ids[offset: offset + batch_size]
-        items = fetch_items(batch_ids, resolved_location_id, zip_code, cookies, referer)
+        items = fetch_items(
+            batch_ids,
+            search_context['location_id'],
+            search_context['zip_code'],
+            search_context['cookies'],
+            search_context['referer'],
+        )
         if not items:
             continue
 
@@ -344,7 +349,7 @@ def search(query, location_id=None, zip_code=None, max_results=5):
             if not item.get('name'):
                 continue
 
-            results.append(normalize_item(item, resolved_location_id))
+            results.append(normalize_item(item, search_context['location_id']))
             if len(results) >= max_results:
                 return results
 
