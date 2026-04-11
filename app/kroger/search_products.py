@@ -77,7 +77,7 @@ def search(query, cookies=None, location_id=None, max_results=5):
             'name': item.get('description'),
             'brand': (item.get('brand') or {}).get('name'),
             'size': item.get('customerFacingSize'),
-            'price': regular.get('price'),
+            'price': regular.get('price'),  # pydantic error TODO
             'price_display': regular.get('defaultDescription'),
             'unit_price': regular.get('equivalizedUnitPriceString'),
             'promo_price': promo.get('defaultDescription') if promo else None,
