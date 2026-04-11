@@ -1,4 +1,5 @@
 from app.publix.constants import REFERER, STORE_DIRECTORY_URL
+from app.models import normalize_location
 from app.utils import fetcher, store_selection
 
 
@@ -9,9 +10,9 @@ def display_stores(stores, zip_code):
 
     for i, store in enumerate(stores, start=1):
         print(f"{i}. {store['name']}")
-        print(f"   {store['address']}, {store['city']}, {store['state']} {store['zip']}")
+        print(f"   {store['address']}, {store['city']}, {store['state']} {store['postal_code']}")
         print(f"   Phone: {store['phone']}")
-        print(f"   Location ID: {store['id']}\n")
+        print(f"   Location ID: {store['location_id']}\n")
 
 
 def fetch_stores(zip_code, max_results=4):
@@ -34,16 +35,19 @@ def fetch_stores(zip_code, max_results=4):
     for store in stores_data[:request_count]:
         _get = store.get
         address = _get('address', {})
-        results.append({
-            'id': _get('storeNumber'),
-            'name': _get('name'),
-            'short_name': _get('shortName'),
+        results.append(normalize_location({
+            'retailer': 'publix',
+            'location_id': str(_get('storeNumber')),
+            'name': _get('name') or 'Publix',
             'address': address.get('streetAddress'),
             'city': address.get('city'),
             'state': address.get('state'),
-            'zip': address.get('zip'),
-            'phone': _get('phoneNumbers', {}).get('Store')
-        })
+            'postal_code': address.get('zip'),
+            'phone': _get('phoneNumbers', {}).get('Store'),
+            'metadata': {
+                'short_name': _get('shortName'),
+            },
+        }))
 
     return results
 
@@ -61,7 +65,7 @@ def find_and_select_store():
     if not selected:
         return None, zip_code
 
-    return selected['id'], zip_code
+    return selected['location_id'], zip_code
 
 
 if __name__ == "__main__":

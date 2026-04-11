@@ -1,12 +1,25 @@
 import re
 import json
+import urllib.parse
 
-from app.utils import fetcher
-from app.kroger.constants import REFERER, SEARCH_URL, BASE_URL
+from scrapling import StealthyFetcher
+
+from app.models import normalize_product
+from app.kroger.constants import SEARCH_URL, BASE_URL
 
 
 class KrogerDataNotFoundError(Exception):
     pass
+
+
+def _dict_cookies_to_playwright(cookies_dict):
+    """Convert a plain {name: value} cookie dict to Playwright list format."""
+    if not cookies_dict:
+        return None
+    return [
+        {'name': name, 'value': str(value), 'url': f'{BASE_URL}/'}
+        for name, value in cookies_dict.items()
+    ]
 
 
 def extract_initial_state(page):
@@ -29,11 +42,27 @@ def get_front_image(images, size='large'):
     return None
 
 
-def search(query, cookies=None, max_results=5):
-    headers = {"Referer": REFERER}
-    params = {'query': query, 'searchType': 'default_search'}
+def extract_numeric_price(price_value):
+    """Extract numeric price from strings like 'USD 2.79'."""
+    if price_value is None:
+        return None
+    if isinstance(price_value, (int, float)):
+        return float(price_value)
+    if isinstance(price_value, str):
+        match = re.search(r'[\d.]+', price_value)
+        if match:
+            return float(match.group(0))
+    return None
 
-    page = fetcher.fetch(SEARCH_URL, params=params, cookies=cookies, headers=headers)
+
+def search(query, cookies=None, location_id=None, max_results=5):
+    params = {'query': query, 'searchType': 'default_search'}
+    url = f"{SEARCH_URL}?{urllib.parse.urlencode(params)}"
+
+    playwright_cookies = _dict_cookies_to_playwright(cookies) if isinstance(cookies, dict) else cookies
+
+    sf = StealthyFetcher()
+    page = sf.fetch(url, cookies=playwright_cookies, headless=True)
 
     state = extract_initial_state(page)
 
@@ -54,22 +83,25 @@ def search(query, cookies=None, max_results=5):
         locations = inventory.get('locations', [])
         stock_level = locations[0].get('stockLevel') if locations else None
 
-        results.append({
+        results.append(normalize_product({
+            'retailer': 'kroger',
+            'product_id': product.get('id'),
+            'location_id': str(location_id) if location_id else None,
             'name': item.get('description'),
             'brand': (item.get('brand') or {}).get('name'),
             'size': item.get('customerFacingSize'),
-            'price': regular.get('price'),
+            'price': extract_numeric_price(regular.get('price')),
             'price_display': regular.get('defaultDescription'),
             'unit_price': regular.get('equivalizedUnitPriceString'),
             'promo_price': promo.get('defaultDescription') if promo else None,
             'rating': ratings.get('averageRating'),
             'reviews': ratings.get('numberOfReviews'),
-            'image': get_front_image(item.get('images')),
+            'image_url': get_front_image(item.get('images')),
             'in_stock': stock_level in ('HIGH', 'LOW', 'MEDIUM') if stock_level else None,
             'stock_level': stock_level,
-            'upc': product.get('id'),
+            'availability': stock_level,
             'url': f"{BASE_URL}/p/{item.get('seoDescription')}/{product.get('id')}",
-        })
+        }))
 
     return results
 

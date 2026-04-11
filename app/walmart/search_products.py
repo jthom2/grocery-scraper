@@ -1,8 +1,9 @@
+from app.models import normalize_product
 from app.utils import get_next_data, fetcher
 from app.walmart.constants import REFERER, SEARCH_URL, BASE_URL
 
 
-def search(query, cookies=None, max_results=5):
+def search(query, cookies=None, location_id=None, max_results=5):
     headers = {"Referer": REFERER}
 
     page = fetcher.fetch(SEARCH_URL, params={'q': query}, cookies=cookies, headers=headers)
@@ -29,28 +30,37 @@ def search(query, cookies=None, max_results=5):
                 is_in_store = any(str(f.get('storeId')) == str(store_id) for f in fulfillment_opts)
                 if not is_in_store:
                     continue
+            cookie_store_id = str(cookies.get('assortmentStoreId')) if cookies and cookies.get('assortmentStoreId') else None
 
             _get = item.get
             rating_data = _get('rating') or {}
             price_info = _get('priceInfo') or {}
             availability = _get('availabilityStatusV2') or {}
+            image = _get('image')
+            if isinstance(image, dict):
+                image_url = image.get('url')
+            else:
+                image_url = str(image) if image else None
 
-            results.append({
+            results.append(normalize_product({
+                'retailer': 'walmart',
+                'product_id': _get('usItemId'),
+                'location_id': str(location_id) if location_id else cookie_store_id,
                 'name': name,
                 'brand': _get('brand'),
+                'size': _get('salesUnit'),
                 'price': _get('price'),
                 'price_display': price_info.get('linePriceDisplay'),
                 'unit_price': price_info.get('unitPrice'),
                 'was_price': price_info.get('wasPrice') or None,
-                'savings': price_info.get('savings') or None,
                 'rating': rating_data.get('averageRating'),
                 'reviews': rating_data.get('numberOfReviews'),
-                'image': _get('image'),
+                'image_url': image_url,
                 'in_stock': availability.get('value') == 'IN_STOCK',
                 'availability': availability.get('display'),
                 'url': f"{BASE_URL}{_get('canonicalUrl', '')}",
                 'description': _get('shortDescription', ''),
-            })
+            }))
             result_count += 1
 
     return results
