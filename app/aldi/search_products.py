@@ -99,7 +99,7 @@ def get_retailer_inventory_session_token(zip_code, latitude, longitude, cookies,
         referer=referer,
     )
     if not data:
-        return None
+        return None, None
 
     shops = (
         data
@@ -108,9 +108,10 @@ def get_retailer_inventory_session_token(zip_code, latitude, longitude, cookies,
     )
 
     if not shops:
-        return None
+        return None, None
 
-    return shops[0].get('retailerInventorySessionToken')
+    shop = shops[0]
+    return shop.get('retailerInventorySessionToken'), str(shop.get('id'))
 
 
 def get_default_shop_id(zip_code, cookies, referer):
@@ -234,28 +235,21 @@ def build_search_context(query, location_id=None, zip_code=None):
     if not resolved_zip:
         return None
 
-    default_shop_future = None
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        coordinates_future = executor.submit(get_coordinates, resolved_zip)
-        if not location_id:
-            # Keep dedicated default-shop lookup: token shops and IDP shops can diverge by ZIP.
-            default_shop_future = executor.submit(get_default_shop_id, resolved_zip, cookies, referer)
+    latitude, longitude = get_coordinates(resolved_zip)
+    if latitude is None or longitude is None:
+        return None
 
-        latitude, longitude = coordinates_future.result()
-        if latitude is None or longitude is None:
-            return None
+    token, shop_id = get_retailer_inventory_session_token(
+        resolved_zip,
+        latitude,
+        longitude,
+        cookies,
+        referer,
+    )
+    if not token:
+        return None
 
-        token = get_retailer_inventory_session_token(
-            resolved_zip,
-            latitude,
-            longitude,
-            cookies,
-            referer,
-        )
-        if not token:
-            return None
-
-        resolved_location_id = str(location_id) if location_id else default_shop_future.result()
+    resolved_location_id = str(location_id) if location_id else shop_id
     if not resolved_location_id:
         return None
 
