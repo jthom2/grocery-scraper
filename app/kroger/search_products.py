@@ -42,6 +42,19 @@ def get_front_image(images, size='large'):
     return None
 
 
+def extract_numeric_price(price_value):
+    """Extract numeric price from strings like 'USD 2.79'."""
+    if price_value is None:
+        return None
+    if isinstance(price_value, (int, float)):
+        return float(price_value)
+    if isinstance(price_value, str):
+        match = re.search(r'[\d.]+', price_value)
+        if match:
+            return float(match.group(0))
+    return None
+
+
 def search(query, cookies=None, location_id=None, max_results=5):
     params = {'query': query, 'searchType': 'default_search'}
     url = f"{SEARCH_URL}?{urllib.parse.urlencode(params)}"
@@ -77,7 +90,7 @@ def search(query, cookies=None, location_id=None, max_results=5):
             'name': item.get('description'),
             'brand': (item.get('brand') or {}).get('name'),
             'size': item.get('customerFacingSize'),
-            'price': regular.get('price'),  # pydantic error TODO
+            'price': extract_numeric_price(regular.get('price')),
             'price_display': regular.get('defaultDescription'),
             'unit_price': regular.get('equivalizedUnitPriceString'),
             'promo_price': promo.get('defaultDescription') if promo else None,
