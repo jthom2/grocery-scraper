@@ -1,14 +1,14 @@
 import time
 
 
+# simple time-based cache with fixed ttl
 class TTLCache:
-    """A simple time-based cache for storing values with a fixed TTL."""
     def __init__(self, ttl_seconds):
         self.ttl = ttl_seconds
         self.cache = {}
 
+    # returns value if exists and not expired
     def get(self, key):
-        """Returns the value if it exists and hasn't expired, else None."""
         if key in self.cache:
             entry = self.cache[key]
             if entry['expires_at'] > time.time():
@@ -16,14 +16,13 @@ class TTLCache:
             del self.cache[key]
         return None
 
+    # sets value with configured ttl
     def set(self, key, value):
-        """Sets a value with the configured TTL."""
         self.cache[key] = {
             'value': value,
             'expires_at': time.time() + self.ttl
         }
 
+    # clears all cache entries
     def clear(self):
-        """Clears all entries from the cache."""
         self.cache.clear()
-
