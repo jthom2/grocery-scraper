@@ -1,6 +1,8 @@
 import json
 import re
 import uuid
+import time
+from functools import lru_cache
 
 from app.models import normalize_product
 from app.utils import fetcher
@@ -21,6 +23,9 @@ from app.aldi.constants import (
 
 ITEM_ID_PATTERN = re.compile(r'^items_[0-9]+-[0-9]+$')
 PRICE_PATTERN = re.compile(r"\$([0-9]+(?:\.[0-9]+)?)")
+
+_SESSION_TOKEN_CACHE_TTL_SECONDS = 15 * 60
+_SESSION_TOKEN_CACHE = {}
 
 
 def run_persisted_query(operation_name, variables, query_hash, cookies, referer):
@@ -51,6 +56,7 @@ def run_persisted_query(operation_name, variables, query_hash, cookies, referer)
     return payload.get('data') or {}
 
 
+@lru_cache(maxsize=256)
 def get_coordinates(zip_code):
     page = fetcher.fetch(f'{ZIP_LOOKUP_URL}/{zip_code}')
 
@@ -84,6 +90,14 @@ def get_default_zip(cookies, referer):
 
 
 def get_retailer_inventory_session_token(zip_code, latitude, longitude, cookies, referer):
+    cache_key = f"{zip_code}:{latitude}:{longitude}"
+    now = time.time()
+
+    if cache_key in _SESSION_TOKEN_CACHE:
+        cached = _SESSION_TOKEN_CACHE[cache_key]
+        if cached['expires_at'] > now:
+            return cached['token'], cached['shop_id']
+
     data = run_persisted_query(
         operation_name='ShopCollectionScoped',
         variables={
@@ -110,7 +124,16 @@ def get_retailer_inventory_session_token(zip_code, latitude, longitude, cookies,
         return None, None
 
     shop = shops[0]
-    return shop.get('retailerInventorySessionToken'), str(shop.get('id'))
+    token = shop.get('retailerInventorySessionToken')
+    shop_id = str(shop.get('id'))
+
+    _SESSION_TOKEN_CACHE[cache_key] = {
+        'token': token,
+        'shop_id': shop_id,
+        'expires_at': now + _SESSION_TOKEN_CACHE_TTL_SECONDS,
+    }
+
+    return token, shop_id
 
 
 def get_default_shop_id(zip_code, cookies, referer):
