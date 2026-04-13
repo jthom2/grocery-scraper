@@ -4,9 +4,9 @@ import uuid
 import time
 from functools import lru_cache
 
-from app.models import normalize_product
 from app.utils import fetcher
 from app.utils.cache import TTLCache
+from app.aldi.parser import normalize_item, parse_price
 from app.aldi.constants import (
     BASE_URL,
     SEARCH_URL,
@@ -23,7 +23,6 @@ from app.aldi.constants import (
 
 
 ITEM_ID_PATTERN = re.compile(r'"(items_[0-9]+-[0-9]+)"')
-PRICE_PATTERN = re.compile(r"\$([0-9]+(?:\.[0-9]+)?)")
 
 _SESSION_TOKEN_CACHE = TTLCache(ttl_seconds=15 * 60)
 
@@ -127,25 +126,6 @@ def get_retailer_inventory_session_token(zip_code, latitude, longitude, cookies,
     return token, shop_id
 
 
-# gets the default aldi shop id for a given zip code
-def get_default_shop_id(zip_code, cookies, referer):
-    page = fetcher.fetch(
-        IDP_SHOPS_URL,
-        params={'postal_code': zip_code},
-        cookies=cookies,
-        headers={"Referer": referer},
-    )
-
-    if page.status != 200:
-        return None
-
-    shops = page.json().get('shops', [])
-    if not shops:
-        return None
-
-    return str(shops[0].get('id'))
-
-
 # queries the search api and retrieves product placement data for a given search term
 def fetch_search_placements(query, zip_code, shop_id, token, cookies, referer, max_results=5):
     data = run_persisted_query(
@@ -209,18 +189,6 @@ def fetch_items(item_ids, shop_id, zip_code, cookies, referer):
     return data.get('items', [])
 
 
-# extracts numeric price value from formatted price string using regex
-def parse_price(price_display):
-    if not price_display:
-        return None
-
-    match = PRICE_PATTERN.search(price_display)
-    if not match:
-        return None
-
-    return float(match.group(1))
-
-
 # establishes session, fetches credentials, and builds the complete search context needed for product queries
 def build_search_context(query, location_id=None, zip_code=None):
     search_page = fetcher.fetch(SEARCH_URL, params={'k': query})
@@ -258,42 +226,35 @@ def build_search_context(query, location_id=None, zip_code=None):
     }
 
 
-# transforms raw api item data into a standardized product model
-def normalize_item(item, location_id):
-    _get = item.get
-    view_section = _get('viewSection') or {}
-    price_view = (_get('price') or {}).get('viewSection', {})
-    item_card = price_view.get('itemCard', {})
-    item_details = price_view.get('itemDetails', {})
-    availability = _get('availability') or {}
-    availability_view = availability.get('viewSection', {})
-    rating_data = _get('productRating') or {}
+# processes a single item and adds it to results if valid
+def _process_item(item, location_id, results, max_results):
+    if not item.get('name'):
+        return False
+    results.append(normalize_item(item, location_id))
+    return len(results) >= max_results
 
-    image = (view_section.get('itemImage') or {}).get('url')
-    evergreen_url = _get('evergreenUrl')
-    price_display = item_card.get('priceString') or item_details.get('priceString')
-    
-    return normalize_product({
-        'retailer': 'aldi',
-        'location_id': str(location_id) if location_id else None,
-        'product_id': _get('legacyId') or _get('productId'),
-        'name': _get('name'),
-        'brand': _get('brandName'),
-        'size': _get('size'),
-        'price': parse_price(price_display),
-        'price_display': price_display,
-        'unit_price': item_details.get('pricePerUnitString') or item_card.get('pricePerUnitString'),
-        'promo_price': None,
-        'was_price': item_card.get('fullPriceString') or item_details.get('fullPriceString'),
-        'rating': rating_data.get('averageStarRating') or rating_data.get('averageRating'),
-        'reviews': rating_data.get('ratingCount') or rating_data.get('numberOfRatings'),
-        'image_url': image,
-        'in_stock': availability.get('available'),
-        'stock_level': availability.get('stockLevel'),
-        'availability': availability_view.get('stockLevelLabelString'),
-        'url': f"{BASE_URL}/store/aldi/products/{evergreen_url}" if evergreen_url else None,
-    })
 
+# processes batches of item ids and collects normalized products
+def _process_items_batch(item_ids, search_context, max_results):
+    results = []
+    batch_size = max(max_results * 2, 8)
+    for offset in range(0, len(item_ids), batch_size):
+        batch_ids = item_ids[offset: offset + batch_size]
+        items = fetch_items(
+            batch_ids,
+            search_context['location_id'],
+            search_context['zip_code'],
+            search_context['cookies'],
+            search_context['referer'],
+        )
+        if not items:
+            continue
+
+        for item in items:
+            if _process_item(item, search_context['location_id'], results, max_results):
+                return results
+
+    return results
 
 
 # orchestrates the complete search flow from context setup through product normalization and filtering
@@ -321,29 +282,7 @@ def search(query, location_id=None, zip_code=None, max_results=5):
     if not item_ids:
         return []
 
-    results = []
-    batch_size = max(max_results * 2, 8)
-    for offset in range(0, len(item_ids), batch_size):
-        batch_ids = item_ids[offset: offset + batch_size]
-        items = fetch_items(
-            batch_ids,
-            search_context['location_id'],
-            search_context['zip_code'],
-            search_context['cookies'],
-            search_context['referer'],
-        )
-        if not items:
-            continue
-
-        for item in items:
-            if not item.get('name'):
-                continue
-
-            results.append(normalize_item(item, search_context['location_id']))
-            if len(results) >= max_results:
-                return results
-
-    return results
+    return _process_items_batch(item_ids, search_context, max_results)
 
 
 # formats and prints search results in a human-readable table layout
