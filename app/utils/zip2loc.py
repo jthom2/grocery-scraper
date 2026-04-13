@@ -14,7 +14,7 @@ def get_city_state(zip_code):
         return None, None
 
     data = response.json()
-    if not data or 'places' not in data:
+    if not data or 'places' not in data or not data['places']:
         return None, None
 
     place = data['places'][0]

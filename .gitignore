@@ -26,3 +26,5 @@ share/python-wheels/
 MANIFEST
 
 test/
+/graphify-out
+/.*
