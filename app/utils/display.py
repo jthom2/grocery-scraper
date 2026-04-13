@@ -2,7 +2,6 @@ from typing import Any
 
 
 def display_products(products: list[dict[str, Any]], query: str, retailer: str) -> None:
-    """Standardized display for product search results."""
     print(f"\n{'='*60}")
     print(f"Found {len(products)} {retailer} products for '{query}'")
     print(f"{'='*60}\n")
@@ -45,7 +44,6 @@ def display_products(products: list[dict[str, Any]], query: str, retailer: str) 
 
 
 def display_stores(stores: list[dict[str, Any]], zip_code: str, retailer: str) -> None:
-    """Standardized display for store location results."""
     print(f"\n{'='*60}")
     print(f"Found {len(stores)} {retailer} stores near '{zip_code}'")
     print(f"{'='*60}\n")
