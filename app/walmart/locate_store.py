@@ -1,7 +1,7 @@
 from urllib.parse import quote
 
 from app.models import normalize_location
-from app.utils import zip2loc, get_next_data, fetcher, store_selection
+from app.utils import zip2loc, get_next_data, fetcher, store_selection, display
 from app.walmart.constants import STORE_DIRECTORY_URL
 
 
@@ -62,14 +62,7 @@ def find_stores(zip_code, max_stores=4):
 
 # formats and prints store locations in a human-readable table layout
 def display_stores(stores, zip_code):
-    print(f"\n{'='*50}")
-    print(f"Walmart Stores near {zip_code}")
-    print(f"{'='*50}")
-
-    for i, store in enumerate(stores, start=1):
-        print(f"{i}. {store['name']}")
-        print(f"   Location ID: {store['location_id']}")
-        print(f"   Address: {store['address']}\n")
+    display.display_stores(stores, zip_code, "Walmart")
 
 
 # prompts for zip code, fetches stores, and returns selected store location and zip code

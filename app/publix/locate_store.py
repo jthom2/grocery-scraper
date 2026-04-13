@@ -1,19 +1,11 @@
 from app.publix.constants import REFERER, STORE_DIRECTORY_URL
 from app.models import normalize_location
-from app.utils import fetcher, store_selection
+from app.utils import fetcher, store_selection, display
 
 
 # formats and prints store locations in a human-readable table layout
 def display_stores(stores, zip_code):
-    print(f"\n{'='*60}")
-    print(f"Found {len(stores)} Publix stores near '{zip_code}'")
-    print(f"{'='*60}\n")
-
-    for i, store in enumerate(stores, start=1):
-        print(f"{i}. {store['name']}")
-        print(f"   {store['address']}, {store['city']}, {store['state']} {store['postal_code']}")
-        print(f"   Phone: {store['phone']}")
-        print(f"   Location ID: {store['location_id']}\n")
+    display.display_stores(stores, zip_code, "Publix")
 
 
 # fetches and normalizes publix store locations from the store directory api

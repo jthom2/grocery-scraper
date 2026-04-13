@@ -2,7 +2,7 @@ import time
 import requests
 
 from app.models import normalize_location
-from app.utils import fetcher, store_selection
+from app.utils import fetcher, store_selection, display
 from app.utils.cache import TTLCache
 from app.aldi.constants import SEARCH_URL, STORE_FRONT_URL, IDP_SHOPS_URL
 
@@ -107,18 +107,7 @@ def get_stores(zip_code, max_results=10):
 
 
 def display_stores(stores, zip_code):
-    print(f"\n{'='*60}")
-    print(f"Found {len(stores)} Aldi stores near '{zip_code}'")
-    print(f"{'='*60}\n")
-
-    for i, store in enumerate(stores, start=1):
-        print(f"{i}. {store['name']}")
-        print(f"   {store['address']}")
-        if store['phone']:
-            print(f"   Phone: {store['phone']}")
-        print(f"   Service: {store['service_type']}")
-        location_code = store.get('metadata', {}).get('location_code')
-        print(f"   Location ID: {store['location_id']} | Location Code: {location_code}\n")
+    display.display_stores(stores, zip_code, "Aldi")
 
 
 def find_and_select_store():

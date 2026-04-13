@@ -1,5 +1,5 @@
 from app.models import normalize_location
-from app.utils import fetcher, store_selection
+from app.utils import fetcher, store_selection, display
 from app.kroger.constants import REFERER, STORE_LOCATOR_URL
 
 
@@ -62,19 +62,7 @@ def get_stores(zip_code, max_results=10):
 
 # formats and prints store locations in a human-readable table layout
 def display_stores(stores, zip_code):
-    print(f"\n{'='*60}")
-    print(f"Found {len(stores)} Kroger stores near '{zip_code}'")
-    print(f"{'='*60}\n")
-
-    for i, store in enumerate(stores, start=1):
-        status = "OPEN" if store['is_open'] else "CLOSED"
-        print(f"{i}. {store['name']}")
-        print(f"   {store['address']}")
-        city_state_zip = store.get('metadata', {}).get('city_state_zip', '')
-        print(f"   {city_state_zip}")
-        print(f"   Phone: {store['phone']}")
-        print(f"   Distance: {store['distance']} | {status} - {store['open_text']}")
-        print(f"   Location ID: {store['location_id']}\n")
+    display.display_stores(stores, zip_code, "Kroger")
 
 
 # prompts for zip code, fetches stores, and returns selected store location and zip code

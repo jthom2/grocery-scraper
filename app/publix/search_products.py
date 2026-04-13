@@ -6,6 +6,7 @@ from scrapling import StealthyFetcher
 from scrapling.fetchers import Fetcher
 
 from app.models import normalize_product
+from app.utils import display
 from app.publix.constants import BASE_URL, SEARCH_URL
 
 logger = logging.getLogger(__name__)
@@ -132,23 +133,7 @@ def extract_products(page, html, max_results, location_id=None):
 
 # formats and prints search results in a human-readable table layout
 def display_results(results, query):
-    print(f"\n{'='*60}")
-    print(f"Found {len(results)} products for '{query}'")
-    print(f"{'='*60}\n")
-
-    for i, product in enumerate(results, start=1):
-        print(f"{i}. {product['name']}")
-        if product['brand']:
-            print(f"   Brand: {product['brand']}")
-        price = product['price_display'] or product['price'] or 'N/A'
-        print(f"   Price: {price}")
-        if product['promo_price']:
-            print(f"   Sale: {product['promo_price']}")
-        if product['size']:
-            print(f"   Size: {product['size']}")
-        if product['url']:
-            print(f"   URL: {product['url']}")
-        print()
+    display.display_products(results, query, "Publix")
 
 
 if __name__ == "__main__":

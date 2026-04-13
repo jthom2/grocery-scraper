@@ -1,5 +1,5 @@
 from app.models import normalize_product
-from app.utils import get_next_data, fetcher
+from app.utils import get_next_data, fetcher, display
 from app.walmart.constants import REFERER, SEARCH_URL, BASE_URL
 
 
@@ -69,15 +69,7 @@ def search(query, cookies=None, location_id=None, max_results=5):
 
 # formats and prints search results in a human-readable table layout
 def display_results(results, query):
-    print(f"\n{'='*60}")
-    print(f"Found {len(results)} products for '{query}'")
-    print(f"{'='*60}\n")
-
-    for i, product in enumerate(results, start=1):
-        print(f"{i}. {product['name']}")
-        print(f"   Price: {product['price_display'] or product['price'] or 'N/A'}")
-        print(f"   In Stock: {product['in_stock']}")
-        print(f"   URL: {product['url']}\n")
+    display.display_products(results, query, "Walmart")
 
 
 if __name__ == "__main__":

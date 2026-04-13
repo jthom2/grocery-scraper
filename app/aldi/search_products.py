@@ -4,7 +4,7 @@ import uuid
 import time
 from functools import lru_cache
 
-from app.utils import fetcher
+from app.utils import fetcher, display
 from app.utils.cache import TTLCache
 from app.aldi.parser import normalize_item, parse_price
 from app.aldi.constants import (
@@ -287,27 +287,7 @@ def search(query, location_id=None, zip_code=None, max_results=5):
 
 # formats and prints search results in a human-readable table layout
 def display_results(results, query):
-    print(f"\n{'='*60}")
-    print(f"Found {len(results)} products for '{query}'")
-    print(f"{'='*60}\n")
-
-    for i, product in enumerate(results, start=1):
-        print(f"{i}. {product['name']}")
-        if product['brand']:
-            print(f"   Brand: {product['brand']}")
-        if product['size']:
-            print(f"   Size: {product['size']}")
-        print(f"   Price: {product['price_display'] or product['price'] or 'N/A'}")
-        if product['was_price']:
-            print(f"   Was: {product['was_price']}")
-        if product['unit_price']:
-            print(f"   Unit: {product['unit_price']}")
-        if product['rating']:
-            print(f"   Rating: {product['rating']}/5 ({product['reviews']} reviews)")
-        print(f"   In Stock: {product['in_stock']} ({product['stock_level']})")
-        if product['url']:
-            print(f"   URL: {product['url']}")
-        print()
+    display.display_products(results, query, "Aldi")
 
 
 if __name__ == "__main__":
