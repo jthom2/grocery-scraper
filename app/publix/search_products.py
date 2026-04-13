@@ -69,9 +69,6 @@ def extract_products(page, html, max_results, location_id=None):
 
         if product_id in seen_ids:
             continue
-                            ##############debug##########
-        # price_match = re.match(r'(\$[\d.]+(?:\s+or\s+\d+\s+for\s+\$[\d.]+)?|\d+\s+for\s+\$[\d.]+)\s*-\s*(.+)', aria_label)
-
 
         price_match = re.match(r'(\$[\d.]+(?:\s+or\s+\d+\s+for\s+\$[\d.]+)?|\d+\s+for\s+\$[\d.]+(?:\s*/\s*[a-zA-Z\d\.]+)?|\$[\d.]+(?:\s*/\s*[a-zA-Z\d\.]+)?)\s*-\s*(.+)', aria_label)
 
