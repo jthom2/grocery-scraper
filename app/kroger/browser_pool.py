@@ -41,8 +41,12 @@ class BrowserPool:
             logger.debug("Initializing Kroger browser pool with StealthySession")
             self._session = StealthySession(
                 headless=True,
-                disable_resources=True,
+                disable_resources=False,
                 network_idle=True,
+                solve_cloudflare=True,
+                real_chrome=True,
+                hide_canvas=True,
+                block_webrtc=True,
                 timeout=30000,
             )
             self._session.__enter__()

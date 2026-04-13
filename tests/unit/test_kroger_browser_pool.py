@@ -43,8 +43,12 @@ class TestBrowserPoolSingleton:
 
         mock_session_class.assert_called_once_with(
             headless=True,
-            disable_resources=True,
+            disable_resources=False,
             network_idle=True,
+            solve_cloudflare=True,
+            real_chrome=True,
+            hide_canvas=True,
+            block_webrtc=True,
             timeout=30000,
         )
         mock_session.__enter__.assert_called_once()

@@ -7,7 +7,7 @@ from scrapling import StealthyFetcher
 
 from app.models import normalize_product
 from app.utils import display
-from app.kroger.constants import SEARCH_URL, BASE_URL
+from app.kroger.constants import SEARCH_URL, BASE_URL, REFERER
 from app.kroger.browser_pool import get_browser_pool
 
 logger = logging.getLogger(__name__)
@@ -73,11 +73,11 @@ def search(query, cookies=None, location_id=None, max_results=5):
 
     if _USE_BROWSER_POOL:
         pool = get_browser_pool()
-        page = pool.fetch(url, cookies=playwright_cookies)
+        page = pool.fetch(url, cookies=playwright_cookies, google_search=False, extra_headers={'referer': REFERER})
         logger.debug(f"Kroger search using browser pool (request #{pool.request_count})")
     else:
         sf = StealthyFetcher()
-        page = sf.fetch(url, cookies=playwright_cookies, headless=True)
+        page = sf.fetch(url, cookies=playwright_cookies, headless=True, google_search=False, extra_headers={'referer': REFERER})
 
     state = extract_initial_state(page)
 
