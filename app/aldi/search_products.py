@@ -1,4 +1,4 @@
-import json
+import orjson
 import re
 import uuid
 import time
@@ -31,13 +31,13 @@ _SESSION_TOKEN_CACHE = TTLCache(ttl_seconds=15 * 60)
 def run_persisted_query(operation_name, variables, query_hash, cookies, referer):
     params = {
         'operationName': operation_name,
-        'variables': json.dumps(variables, separators=(',', ':')),
-        'extensions': json.dumps({
+        'variables': orjson.dumps(variables).decode(),
+        'extensions': orjson.dumps({
             'persistedQuery': {
                 'version': 1,
                 'sha256Hash': query_hash,
             }
-        }, separators=(',', ':')),
+        }).decode(),
     }
 
     page = fetcher.fetch(
@@ -163,7 +163,7 @@ def fetch_search_placements(query, zip_code, shop_id, token, cookies, referer, m
 
 # extracts unique product item ids from search placements using regex pattern matching
 def extract_item_ids(placements, max_ids=40):
-    text = json.dumps(placements)
+    text = orjson.dumps(placements).decode()
     # Deduplicate while preserving order using a dictionary
     item_ids = list(dict.fromkeys(ITEM_ID_PATTERN.findall(text)))
     return item_ids[:max_ids]

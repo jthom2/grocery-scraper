@@ -1,5 +1,5 @@
 # validates walmart search handles various api response shapes
-import json
+import orjson
 
 import pytest
 
@@ -21,7 +21,7 @@ class TestWalmartSearch:
                 }
             }
         }
-        return f'<script id="__NEXT_DATA__">{json.dumps(next_data)}</script>'
+        return f'<script id="__NEXT_DATA__">{orjson.dumps(next_data).decode()}</script>'
 
     # ensures pydantic model is applied to search results
     def test_search_returns_normalized_products(self, mock_fetcher, mock_page_factory):

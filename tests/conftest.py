@@ -1,4 +1,4 @@
-import json
+import orjson
 import re
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -29,7 +29,7 @@ class MockPage:
     def json(self):
         if self._json_data is not None:
             return self._json_data
-        return json.loads(self.body)
+        return orjson.loads(self.body)
 
     # parses script tags from html body to support search extraction tests
     def css(self, selector: str):
@@ -61,10 +61,9 @@ class MockElement:
 def load_fixture():
     def _load(relative_path: str) -> str | dict:
         fixture_path = FIXTURES_DIR / relative_path
-        content = fixture_path.read_text(encoding="utf-8")
         if fixture_path.suffix == ".json":
-            return json.loads(content)
-        return content
+            return orjson.loads(fixture_path.read_bytes())
+        return fixture_path.read_text(encoding="utf-8")
 
     return _load
 

@@ -1,5 +1,5 @@
 # fixtures for measuring and tracking performance regressions
-import json
+import orjson
 import time
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -44,8 +44,8 @@ class PerformanceBaseline:
         self.baselines = {}
         if self.baseline_file.exists():
             try:
-                self.baselines = json.loads(self.baseline_file.read_text())
-            except (json.JSONDecodeError, IOError):
+                self.baselines = orjson.loads(self.baseline_file.read_bytes())
+            except (orjson.JSONDecodeError, IOError):
                 pass
 
     def get_baseline(self, test_name: str) -> Optional[dict]:
@@ -54,8 +54,8 @@ class PerformanceBaseline:
     def save_baseline(self, test_name: str, metrics: PerformanceMetrics):
         metrics.timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         self.baselines[test_name] = metrics.to_dict()
-        self.baseline_file.write_text(
-            json.dumps(self.baselines, indent=2)
+        self.baseline_file.write_bytes(
+            orjson.dumps(self.baselines, option=orjson.OPT_INDENT_2)
         )
 
     def get_all_baselines(self) -> dict:

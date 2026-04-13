@@ -32,8 +32,8 @@ class TestKrogerStealthyFetcherPerformance:
             }
         }
 
-        import json
-        state_json = json.dumps(initial_state).replace("'", "\\'")
+        import orjson
+        state_json = orjson.dumps(initial_state).decode().replace("'", "\\'")
         return f"""
         <html>
         <body>
@@ -214,12 +214,12 @@ class TestKrogerSearchRegressions:
 
 # validates json parsing and normalization stay fast
 class TestKrogerPageExtractionPerformance:
-    # regex + json.loads should be <50ms for typical payloads
+    # regex + orjson.loads should be <50ms for typical payloads
     def test_initial_state_extraction_latency(
         self,
         performance_timer,
     ):
-        import json
+        import orjson
         import re
 
         large_state = {
@@ -235,14 +235,14 @@ class TestKrogerPageExtractionPerformance:
             }
         }
 
-        state_json = json.dumps(large_state)
+        state_json = orjson.dumps(large_state).decode()
         html = f"<script>JSON.parse('{state_json}')</script>"
 
         with performance_timer() as timer:
             # Simulate extraction
             match = re.search(r"JSON\.parse\('(.+)'\)", html, re.DOTALL)
             if match:
-                parsed = json.loads(match.group(1))
+                parsed = orjson.loads(match.group(1).encode('utf-8'))
 
         # Extraction should be <50ms even for large payloads
         assert timer.get_ms() < 100, f"Extraction took {timer.get_ms():.0f}ms"

@@ -1,5 +1,5 @@
 # validates walmart search latency stays within acceptable bounds
-import json
+import orjson
 import pytest
 
 from app.walmart.search_products import search
@@ -27,7 +27,7 @@ class TestWalmartSearchPerformance:
                 }
             }
         }
-        return f'<script id="__NEXT_DATA__">{json.dumps(next_data)}</script>'
+        return f'<script id="__NEXT_DATA__">{orjson.dumps(next_data).decode()}</script>'
 
     def _create_sample_items(self, count=20):
         return [
@@ -181,7 +181,7 @@ class TestWalmartSearchRegressions:
                 }
             }
         }
-        return f'<script id="__NEXT_DATA__">{json.dumps(next_data)}</script>'
+        return f'<script id="__NEXT_DATA__">{orjson.dumps(next_data).decode()}</script>'
 
     def _create_sample_items(self, count=20):
         return [

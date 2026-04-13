@@ -1,5 +1,5 @@
 import re
-import json
+import orjson
 import logging
 import urllib.parse
 
@@ -39,7 +39,7 @@ def extract_initial_state(page):
             if match:
                 json_str = match.group(1)
                 json_str = json_str.encode('utf-8').decode('unicode_escape')
-                return json.loads(json_str)
+                return orjson.loads(json_str)
     raise KrogerDataNotFoundError(f"Status: {page.status} | URL: {page.url}")
 
 

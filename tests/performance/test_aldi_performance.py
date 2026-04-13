@@ -1,5 +1,4 @@
 # validates aldi's 7-request flow stays optimized
-import json
 import pytest
 from unittest.mock import MagicMock
 

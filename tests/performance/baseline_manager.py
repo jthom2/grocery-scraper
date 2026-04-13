@@ -1,5 +1,5 @@
 # cli tool for managing and comparing performance baselines
-import json
+import orjson
 import argparse
 from pathlib import Path
 from typing import Optional, Dict, List
@@ -19,12 +19,12 @@ class BaselineManager:
         self.baselines = {}
         if self.baseline_file.exists():
             try:
-                self.baselines = json.loads(self.baseline_file.read_text())
-            except (json.JSONDecodeError, IOError):
+                self.baselines = orjson.loads(self.baseline_file.read_bytes())
+            except (orjson.JSONDecodeError, IOError):
                 pass
 
     def _save(self):
-        self.baseline_file.write_text(json.dumps(self.baselines, indent=2))
+        self.baseline_file.write_bytes(orjson.dumps(self.baselines, option=orjson.OPT_INDENT_2))
 
     def list_baselines(self) -> Dict:
         return self.baselines
@@ -105,14 +105,14 @@ class BaselineManager:
         self._save()
 
     def export_baselines(self, output_file: Path):
-        output_file.write_text(json.dumps(self.baselines, indent=2))
+        output_file.write_bytes(orjson.dumps(self.baselines, option=orjson.OPT_INDENT_2))
 
     def import_baselines(self, input_file: Path):
         try:
-            imported = json.loads(input_file.read_text())
+            imported = orjson.loads(input_file.read_bytes())
             self.baselines.update(imported)
             self._save()
-        except (json.JSONDecodeError, IOError) as e:
+        except (orjson.JSONDecodeError, IOError) as e:
             raise ValueError(f"Failed to import baselines: {e}")
 
     def get_summary(self) -> Dict:

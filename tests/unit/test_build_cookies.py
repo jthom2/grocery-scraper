@@ -1,6 +1,6 @@
 # ensures cookies match walmart's expected format for location scoping
 import base64
-import json
+import orjson
 import uuid
 from urllib.parse import unquote
 
@@ -49,8 +49,8 @@ class TestBuildLocationCookies:
     def test_loc_guest_data_is_valid_base64(self):
         cookies = build_location_cookies("123", "90210")
         decoded_b64 = unquote(cookies["locGuestData"])
-        raw_json = base64.b64decode(decoded_b64).decode("utf-8")
-        payload = json.loads(raw_json)
+        raw_json = base64.b64decode(decoded_b64)
+        payload = orjson.loads(raw_json)
 
         assert payload["pickup"]["nodeId"] == "123"
         assert payload["postalCode"]["base"] == "90210"
@@ -64,8 +64,8 @@ class TestBuildLocationCookies:
     def test_payload_contains_timestamps(self):
         cookies = build_location_cookies("123", "90210")
         decoded_b64 = unquote(cookies["locGuestData"])
-        raw_json = base64.b64decode(decoded_b64).decode("utf-8")
-        payload = json.loads(raw_json)
+        raw_json = base64.b64decode(decoded_b64)
+        payload = orjson.loads(raw_json)
 
         assert "timestamp" in payload["pickup"]
         assert "timestamp" in payload["postalCode"]
@@ -75,8 +75,8 @@ class TestBuildLocationCookies:
     def test_payload_validate_key_contains_acid(self):
         cookies = build_location_cookies("123", "90210")
         decoded_b64 = unquote(cookies["locGuestData"])
-        raw_json = base64.b64decode(decoded_b64).decode("utf-8")
-        payload = json.loads(raw_json)
+        raw_json = base64.b64decode(decoded_b64)
+        payload = orjson.loads(raw_json)
 
         assert cookies["ACID"] in payload["validateKey"]
         assert payload["validateKey"].startswith("prod:v2:")
@@ -97,8 +97,8 @@ class TestBuildLocationCookies:
         decoded1 = unquote(cookies1["locGuestData"])
         decoded2 = unquote(cookies2["locGuestData"])
 
-        payload1 = json.loads(base64.b64decode(decoded1).decode("utf-8"))
-        payload2 = json.loads(base64.b64decode(decoded2).decode("utf-8"))
+        payload1 = orjson.loads(base64.b64decode(decoded1))
+        payload2 = orjson.loads(base64.b64decode(decoded2))
 
         assert payload1["postalCode"]["base"] == "90210"
         assert payload2["postalCode"]["base"] == "10001"
