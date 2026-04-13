@@ -11,11 +11,12 @@ from app.publix.constants import BASE_URL, SEARCH_URL
 logger = logging.getLogger(__name__)
 
 
-# fast content validation avoids slow stealthyfetcher fallback
+# checks if html contains product price data to validate search success
 def _has_product_content(html):
     return bool(re.search(r'aria-label="\$[\d.]+', html))
 
 
+# searches publix products with fast fetcher fallback to browser automation for complex scenarios
 def search(query, location_id=None, max_results=15):
 
     url = f"{SEARCH_URL}?searchTerm={urllib.parse.quote(query)}&facet=promoType%3A%3Atrue"
@@ -73,6 +74,7 @@ def search(query, location_id=None, max_results=15):
     return extract_products(page, html, max_results, location_id)
 
 
+# extracts and normalizes product data from search result html using regex pattern matching
 def extract_products(page, html, max_results, location_id=None):
     
     products = []
@@ -128,6 +130,7 @@ def extract_products(page, html, max_results, location_id=None):
     return products
 
 
+# formats and prints search results in a human-readable table layout
 def display_results(results, query):
     print(f"\n{'='*60}")
     print(f"Found {len(results)} products for '{query}'")

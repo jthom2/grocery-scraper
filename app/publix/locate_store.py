@@ -3,6 +3,7 @@ from app.models import normalize_location
 from app.utils import fetcher, store_selection
 
 
+# formats and prints store locations in a human-readable table layout
 def display_stores(stores, zip_code):
     print(f"\n{'='*60}")
     print(f"Found {len(stores)} Publix stores near '{zip_code}'")
@@ -15,6 +16,7 @@ def display_stores(stores, zip_code):
         print(f"   Location ID: {store['location_id']}\n")
 
 
+# fetches and normalizes publix store locations from the store directory api
 def fetch_stores(zip_code, max_results=4):
     request_count = max(1, int(max_results))
     params = {
@@ -52,6 +54,7 @@ def fetch_stores(zip_code, max_results=4):
     return results
 
 
+# prompts for zip code, fetches stores, and returns selected store location and zip code
 def find_and_select_store():
     zip_code = input("Enter ZIP code: ").strip()
     stores = fetch_stores(zip_code)

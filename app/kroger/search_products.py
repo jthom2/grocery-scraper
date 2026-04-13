@@ -18,7 +18,7 @@ class KrogerDataNotFoundError(Exception):
     pass
 
 
-# playwright requires list of {name, value, url} dicts not simple dict
+# converts cookie dict to playwright format list of {name, value, url} objects
 def _dict_cookies_to_playwright(cookies_dict):
     if not cookies_dict:
         return None
@@ -28,6 +28,7 @@ def _dict_cookies_to_playwright(cookies_dict):
     ]
 
 
+# extracts the initial state json object from page scripts
 def extract_initial_state(page):
     scripts = page.css('script')
     for script in scripts:
@@ -41,6 +42,7 @@ def extract_initial_state(page):
     raise KrogerDataNotFoundError(f"Status: {page.status} | URL: {page.url}")
 
 
+# retrieves the front image url from product images list by size
 def get_front_image(images, size='large'):
     for img in images or []:
         if img.get('perspective') == 'front' and img.get('size') == size:
@@ -48,7 +50,7 @@ def get_front_image(images, size='large'):
     return None
 
 
-# kroger returns prices as "USD 2.79" strings, need float for normalization
+# extracts numeric price value from formatted price strings or numeric types
 def extract_numeric_price(price_value):
     if price_value is None:
         return None
@@ -61,6 +63,7 @@ def extract_numeric_price(price_value):
     return None
 
 
+# fetches and normalizes kroger product search results using browser automation
 def search(query, cookies=None, location_id=None, max_results=5):
     params = {'query': query, 'searchType': 'default_search'}
     url = f"{SEARCH_URL}?{urllib.parse.urlencode(params)}"
@@ -117,6 +120,7 @@ def search(query, cookies=None, location_id=None, max_results=5):
     return results
 
 
+# formats and prints search results in a human-readable table layout
 def display_results(results, query):
     print(f"\n{'='*60}")
     print(f"Found {len(results)} products for '{query}'")

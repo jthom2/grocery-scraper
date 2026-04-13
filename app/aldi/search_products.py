@@ -28,6 +28,7 @@ PRICE_PATTERN = re.compile(r"\$([0-9]+(?:\.[0-9]+)?)")
 _SESSION_TOKEN_CACHE = TTLCache(ttl_seconds=15 * 60)
 
 
+# executes a graphql persisted query and returns the data payload or empty dict on error
 def run_persisted_query(operation_name, variables, query_hash, cookies, referer):
     params = {
         'operationName': operation_name,
@@ -56,6 +57,7 @@ def run_persisted_query(operation_name, variables, query_hash, cookies, referer)
     return payload.get('data') or {}
 
 
+# looks up latitude and longitude for a given zip code using geolocation api
 @lru_cache(maxsize=256)
 def get_coordinates(zip_code):
     page = fetcher.fetch(f'{ZIP_LOOKUP_URL}/{zip_code}')
@@ -76,6 +78,7 @@ def get_coordinates(zip_code):
         return None, None
 
 
+# retrieves the user's default zip code from aldi's location endpoint
 def get_default_zip(cookies, referer):
     page = fetcher.fetch(
         IDP_LOCATION_URL,
@@ -89,6 +92,7 @@ def get_default_zip(cookies, referer):
     return page.json().get('postal_code')
 
 
+# fetches and caches retailer inventory session token and shop id for search authorization
 def get_retailer_inventory_session_token(zip_code, latitude, longitude, cookies, referer):
     cache_key = f"{zip_code}:{latitude}:{longitude}"
     cached = _SESSION_TOKEN_CACHE.get(cache_key)
@@ -123,6 +127,7 @@ def get_retailer_inventory_session_token(zip_code, latitude, longitude, cookies,
     return token, shop_id
 
 
+# gets the default aldi shop id for a given zip code
 def get_default_shop_id(zip_code, cookies, referer):
     page = fetcher.fetch(
         IDP_SHOPS_URL,
@@ -141,6 +146,7 @@ def get_default_shop_id(zip_code, cookies, referer):
     return str(shops[0].get('id'))
 
 
+# queries the search api and retrieves product placement data for a given search term
 def fetch_search_placements(query, zip_code, shop_id, token, cookies, referer, max_results=5):
     data = run_persisted_query(
         operation_name='SearchResultsPlacements',
@@ -175,6 +181,7 @@ def fetch_search_placements(query, zip_code, shop_id, token, cookies, referer, m
     return data.get('searchResultsPlacements', {}).get('placements', [])
 
 
+# extracts unique product item ids from search placements using regex pattern matching
 def extract_item_ids(placements, max_ids=40):
     text = json.dumps(placements)
     # Deduplicate while preserving order using a dictionary
@@ -182,6 +189,7 @@ def extract_item_ids(placements, max_ids=40):
     return item_ids[:max_ids]
 
 
+# fetches detailed product information for a list of item ids
 def fetch_items(item_ids, shop_id, zip_code, cookies, referer):
     data = run_persisted_query(
         operation_name='Items',
@@ -201,6 +209,7 @@ def fetch_items(item_ids, shop_id, zip_code, cookies, referer):
     return data.get('items', [])
 
 
+# extracts numeric price value from formatted price string using regex
 def parse_price(price_display):
     if not price_display:
         return None
@@ -212,6 +221,7 @@ def parse_price(price_display):
     return float(match.group(1))
 
 
+# establishes session, fetches credentials, and builds the complete search context needed for product queries
 def build_search_context(query, location_id=None, zip_code=None):
     search_page = fetcher.fetch(SEARCH_URL, params={'k': query})
     cookies = search_page.cookies
@@ -248,6 +258,7 @@ def build_search_context(query, location_id=None, zip_code=None):
     }
 
 
+# transforms raw api item data into a standardized product model
 def normalize_item(item, location_id):
     _get = item.get
     view_section = _get('viewSection') or {}
@@ -285,6 +296,7 @@ def normalize_item(item, location_id):
 
 
 
+# orchestrates the complete search flow from context setup through product normalization and filtering
 def search(query, location_id=None, zip_code=None, max_results=5):
     if max_results <= 0:
         return []
@@ -334,6 +346,7 @@ def search(query, location_id=None, zip_code=None, max_results=5):
     return results
 
 
+# formats and prints search results in a human-readable table layout
 def display_results(results, query):
     print(f"\n{'='*60}")
     print(f"Found {len(results)} products for '{query}'")

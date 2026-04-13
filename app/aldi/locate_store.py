@@ -16,11 +16,11 @@ def _prime_session(force_refresh=False):
     if cached and not force_refresh:
         return cached
 
-    # Attempt to get instacart_sid first via requests (faster)
+    # attempt to get instacart_sid first via requests (faster)
     warmup = _SESSION.get(SEARCH_URL, timeout=_REQUEST_TIMEOUT, headers={"Referer": SEARCH_URL})
     instacart_sid = _SESSION.cookies.get('__Host-instacart_sid')
 
-    # Also get full cookies/referer via fetcher for fallback path
+    # also get full cookies/referer via fetcher for fallback path
     entry = fetcher.fetch(SEARCH_URL)
     referer = SEARCH_URL
     if entry.status != 200:
@@ -61,7 +61,7 @@ def _fetch_shops_direct(zip_code, force_refresh=False):
 def get_stores(zip_code, max_results=10):
     shops_data = _fetch_shops_direct(zip_code)
     
-    # Fallback to fetcher if direct requests failed
+    # fallback to fetcher if direct requests failed
     if shops_data is None:
         session = _prime_session()
         if not session['cookies']:

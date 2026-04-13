@@ -7,6 +7,7 @@ class StoreNotFoundError(Exception):
     pass
 
 
+# fetches and normalizes kroger store locations from the store locator api
 def get_stores(zip_code, max_results=10):
     headers = {"Referer": f"{REFERER}stores/search"}
     params = {'filter.query': zip_code, 'projections': 'compact'}
@@ -59,6 +60,7 @@ def get_stores(zip_code, max_results=10):
     return results
 
 
+# formats and prints store locations in a human-readable table layout
 def display_stores(stores, zip_code):
     print(f"\n{'='*60}")
     print(f"Found {len(stores)} Kroger stores near '{zip_code}'")
@@ -75,6 +77,7 @@ def display_stores(stores, zip_code):
         print(f"   Location ID: {store['location_id']}\n")
 
 
+# prompts for zip code, fetches stores, and returns selected store location and zip code
 def find_and_select_store():
     zip_code = input("ZIP: ")
     stores = get_stores(zip_code)

@@ -5,6 +5,7 @@ from app.utils import zip2loc, get_next_data, fetcher, store_selection
 from app.walmart.constants import STORE_DIRECTORY_URL
 
 
+# converts zip code to city/state and fetches nearby walmart store locations
 def find_stores(zip_code, max_stores=4):
     city, state = zip2loc.get_city_state(zip_code)
 
@@ -59,6 +60,7 @@ def find_stores(zip_code, max_stores=4):
     return stores
 
 
+# formats and prints store locations in a human-readable table layout
 def display_stores(stores, zip_code):
     print(f"\n{'='*50}")
     print(f"Walmart Stores near {zip_code}")
@@ -70,6 +72,7 @@ def display_stores(stores, zip_code):
         print(f"   Address: {store['address']}\n")
 
 
+# prompts for zip code, fetches stores, and returns selected store location and zip code
 def find_and_select_store():
     zip_code = input("Enter zip code: ")
     stores = find_stores(zip_code)

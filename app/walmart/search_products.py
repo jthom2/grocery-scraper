@@ -3,6 +3,7 @@ from app.utils import get_next_data, fetcher
 from app.walmart.constants import REFERER, SEARCH_URL, BASE_URL
 
 
+# fetches and normalizes walmart product search results with optional store filtering
 def search(query, cookies=None, location_id=None, max_results=5):
     headers = {"Referer": REFERER}
 
@@ -66,6 +67,7 @@ def search(query, cookies=None, location_id=None, max_results=5):
     return results
 
 
+# formats and prints search results in a human-readable table layout
 def display_results(results, query):
     print(f"\n{'='*60}")
     print(f"Found {len(results)} products for '{query}'")
