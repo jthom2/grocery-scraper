@@ -102,6 +102,12 @@ def mock_stealthy_fetcher(mocker):
 @pytest.fixture
 def mock_requests_get(mocker):
     """Mock requests.get for utilities using requests directly."""
+    from app.utils.zip2loc import get_city_state
+    from app.aldi.search_products import get_coordinates
+
+    get_city_state.cache_clear()
+    get_coordinates.cache_clear()
+
     return mocker.patch("requests.get")
 
 

@@ -37,6 +37,8 @@ addopts = ["-v", "--strict-markers", "-ra"]
 markers = [
     "unit: Unit tests",
     "integration: Integration tests with mocked HTTP",
+    "perf: Performance regression tests",
+    "perf_baseline: Performance baseline establishment tests",
 ]
 
 [tool.coverage.run]
