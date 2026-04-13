@@ -1,10 +1,9 @@
-"""Unit tests for price extraction functions across retailers."""
+# ensures price strings are parsed consistently across retailers
 import pytest
 
 
+# kroger returns prices as "USD X.XX" strings
 class TestKrogerPriceExtraction:
-    """Test Kroger's extract_numeric_price function."""
-
     @pytest.fixture
     def extract_fn(self):
         from app.kroger.search_products import extract_numeric_price
@@ -25,8 +24,8 @@ class TestKrogerPriceExtraction:
             ("invalid", None),
         ],
     )
+    # covers common price string formats from kroger api
     def test_price_extraction(self, extract_fn, input_val, expected):
-        """Parametrized price extraction tests."""
         result = extract_fn(input_val)
         if expected is None:
             assert result is None
@@ -34,9 +33,8 @@ class TestKrogerPriceExtraction:
             assert result == pytest.approx(expected)
 
 
+# aldi embeds prices in arbitrary text
 class TestAldiPriceExtraction:
-    """Test Aldi's parse_price function."""
-
     @pytest.fixture
     def parse_fn(self):
         from app.aldi.search_products import parse_price
@@ -57,8 +55,8 @@ class TestAldiPriceExtraction:
             ("no price here", None),
         ],
     )
+    # covers common price string formats from aldi api
     def test_price_parsing(self, parse_fn, input_val, expected):
-        """Parametrized price parsing tests."""
         from app.aldi.search_products import parse_price
 
         result = parse_price(input_val)
@@ -68,9 +66,8 @@ class TestAldiPriceExtraction:
             assert result == pytest.approx(expected)
 
 
+# publix prices come from aria-label attributes
 class TestPublixPriceExtraction:
-    """Test Publix inline price regex pattern."""
-
     @pytest.fixture
     def extract_fn(self):
         import re
@@ -100,8 +97,8 @@ class TestPublixPriceExtraction:
             ("$0.50/ea", 0.50),
         ],
     )
+    # covers common price string formats from publix html
     def test_price_extraction(self, extract_fn, input_val, expected):
-        """Parametrized Publix price extraction."""
         result = extract_fn(input_val)
         if expected is None:
             assert result is None
@@ -109,11 +106,10 @@ class TestPublixPriceExtraction:
             assert result == pytest.approx(expected)
 
 
+# documents known limitations in price parsing
 class TestPriceEdgeCases:
-    """Test edge cases for price extraction across implementations."""
-
+    # commas in prices are rare but can appear
     def test_kroger_handles_comma_in_price(self):
-        """Kroger price extraction doesn't handle commas well (known limitation)."""
         from app.kroger.search_products import extract_numeric_price
 
         result = extract_numeric_price("$1,234.56")
@@ -121,23 +117,23 @@ class TestPriceEdgeCases:
         # This test documents current behavior
         assert result is not None or result is None  # Either way, no crash
 
+    # sale prices often show original and discounted price
     def test_aldi_multiple_dollar_signs(self):
-        """Aldi extracts first price when multiple exist."""
         from app.aldi.search_products import parse_price
 
         result = parse_price("Was $10.99, Now $7.99")
         # Should find the first one
         assert result == pytest.approx(10.99)
 
+    # api sometimes returns numeric type instead of string
     def test_kroger_integer_price(self):
-        """Kroger handles integer input."""
         from app.kroger.search_products import extract_numeric_price
 
         result = extract_numeric_price(5)
         assert result == 5.0
 
+    # api sometimes returns numeric type instead of string
     def test_kroger_float_input(self):
-        """Kroger handles float input."""
         from app.kroger.search_products import extract_numeric_price
 
         result = extract_numeric_price(4.99)

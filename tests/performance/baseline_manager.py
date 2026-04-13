@@ -1,14 +1,4 @@
-"""Baseline management utility for performance regression testing.
-
-This script manages performance baselines and compares current
-measurements against stored baselines to detect regressions.
-
-Usage:
-    python baseline_manager.py --action list           # List all baselines
-    python baseline_manager.py --action compare         # Compare vs baselines
-    python baseline_manager.py --action reset           # Reset all baselines
-    python baseline_manager.py --action export          # Export to JSON
-"""
+# cli tool for managing and comparing performance baselines
 import json
 import argparse
 from pathlib import Path
@@ -18,21 +8,14 @@ from typing import Optional, Dict, List
 BASELINES_FILE = Path(__file__).parent / "baselines" / "performance.json"
 
 
+# persists and compares performance metrics across runs
 class BaselineManager:
-    """Manage performance baselines."""
-
     def __init__(self, baseline_file: Path = BASELINES_FILE):
-        """Initialize manager.
-
-        Args:
-            baseline_file: Path to baseline JSON file
-        """
         self.baseline_file = baseline_file
         self.baseline_file.parent.mkdir(exist_ok=True)
         self._load()
 
     def _load(self):
-        """Load baselines from file."""
         self.baselines = {}
         if self.baseline_file.exists():
             try:
@@ -41,33 +24,18 @@ class BaselineManager:
                 pass
 
     def _save(self):
-        """Save baselines to file."""
         self.baseline_file.write_text(json.dumps(self.baselines, indent=2))
 
     def list_baselines(self) -> Dict:
-        """List all baselines.
-
-        Returns:
-            Dict of baseline names and metrics
-        """
         return self.baselines
 
+    # returns pass/regression status with detailed breakdown
     def compare_measurement(
         self,
         test_name: str,
         actual_ms: float,
         regression_threshold_pct: float = 20,
     ) -> Dict:
-        """Compare measurement against baseline.
-
-        Args:
-            test_name: Name of the test
-            actual_ms: Actual measured latency in milliseconds
-            regression_threshold_pct: Allowed regression percentage
-
-        Returns:
-            Dict with comparison results
-        """
         baseline = self.baselines.get(test_name)
         if baseline is None:
             return {
@@ -97,20 +65,12 @@ class BaselineManager:
             ),
         }
 
+    # batch comparison for running full test suite
     def compare_all_measurements(
         self,
         measurements: Dict[str, float],
         regression_threshold_pct: float = 20,
     ) -> Dict:
-        """Compare multiple measurements against baselines.
-
-        Args:
-            measurements: Dict of {test_name: actual_ms}
-            regression_threshold_pct: Allowed regression percentage
-
-        Returns:
-            Dict with comparison results for each test
-        """
         results = {
             "total_tests": len(measurements),
             "regressions": 0,
@@ -137,34 +97,17 @@ class BaselineManager:
         return results
 
     def update_baseline(self, test_name: str, metrics: Dict):
-        """Update a baseline.
-
-        Args:
-            test_name: Name of the test
-            metrics: Metrics dict with at least duration_ms
-        """
         self.baselines[test_name] = metrics
         self._save()
 
     def reset_baselines(self):
-        """Reset all baselines."""
         self.baselines = {}
         self._save()
 
     def export_baselines(self, output_file: Path):
-        """Export baselines to file.
-
-        Args:
-            output_file: Path to export JSON file
-        """
         output_file.write_text(json.dumps(self.baselines, indent=2))
 
     def import_baselines(self, input_file: Path):
-        """Import baselines from file.
-
-        Args:
-            input_file: Path to import JSON file
-        """
         try:
             imported = json.loads(input_file.read_text())
             self.baselines.update(imported)
@@ -173,11 +116,6 @@ class BaselineManager:
             raise ValueError(f"Failed to import baselines: {e}")
 
     def get_summary(self) -> Dict:
-        """Get summary statistics of baselines.
-
-        Returns:
-            Dict with summary stats
-        """
         if not self.baselines:
             return {
                 "total_baselines": 0,
@@ -199,7 +137,6 @@ class BaselineManager:
 
 
 def main():
-    """CLI entry point."""
     parser = argparse.ArgumentParser(
         description="Manage performance baselines"
     )

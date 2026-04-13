@@ -1,4 +1,4 @@
-"""Performance regression tests for Aldi search with caching validation."""
+# validates aldi's 7-request flow stays optimized
 import json
 import pytest
 from unittest.mock import MagicMock
@@ -15,16 +15,14 @@ from tests.performance.assertions import (
 pytestmark = pytest.mark.perf
 
 
+# simulates session caching for testing warm path
 class AldiSearchContextCache:
-    """Cache for Aldi search context to simulate session reuse."""
-
     def __init__(self):
         self.cache = {}
         self.hits = 0
         self.misses = 0
 
     def get(self, zip_code: str):
-        """Get cached context for ZIP code."""
         if zip_code in self.cache:
             self.hits += 1
             return self.cache[zip_code]
@@ -32,28 +30,23 @@ class AldiSearchContextCache:
         return None
 
     def set(self, zip_code: str, context: dict):
-        """Cache search context for ZIP code."""
         self.cache[zip_code] = context
 
     def hit_rate(self) -> float:
-        """Calculate hit rate as percentage."""
         total = self.hits + self.misses
         if total == 0:
             return 0.0
         return (self.hits / total) * 100
 
     def reset(self):
-        """Clear cache and stats."""
         self.cache.clear()
         self.hits = 0
         self.misses = 0
 
 
+# token caching is critical for avoiding repeated auth requests
 class TestAldiSessionTokenCaching:
-    """Test Aldi session token caching effectiveness."""
-
     def _create_mock_aldi_responses(self):
-        """Create mocked responses for Aldi multi-request flow."""
         responses = {
             "search_page": MagicMock(
                 status=200,
@@ -110,6 +103,7 @@ class TestAldiSessionTokenCaching:
         }
         return responses
 
+    # 7 requests * ~500ms = ~4000ms cold start baseline
     @pytest.mark.perf_baseline
     def test_aldi_cold_start_baseline(
         self,
@@ -117,7 +111,6 @@ class TestAldiSessionTokenCaching:
         performance_timer,
         perf_baseline,
     ):
-        """Establish baseline for Aldi cold start (~4000ms target)."""
         responses = self._create_mock_aldi_responses()
 
         def mock_fetch_side_effect(url, *args, **kwargs):
@@ -152,13 +145,13 @@ class TestAldiSessionTokenCaching:
             ),
         )
 
+    # fails ci if cold start exceeds threshold
     def test_aldi_cold_start_latency_under_threshold(
         self,
         mock_http_with_delay,
         monkeypatch,
         performance_timer,
     ):
-        """Assert Aldi cold start latency under 4000ms."""
         delays = [200, 150, 100, 200, 100, 150, 100]  # ~1000ms total
         call_count = [0]
 
@@ -184,6 +177,7 @@ class TestAldiSessionTokenCaching:
         # Reduced expectation for integration with mocking
         assert timer.get_ms() < 4500
 
+    # detects if we accidentally added extra requests
     def test_aldi_request_count_tracking(
         self,
         mock_request_tracker,
@@ -191,8 +185,6 @@ class TestAldiSessionTokenCaching:
         monkeypatch,
         performance_timer,
     ):
-        """Track HTTP request count for optimization opportunities."""
-
         def mock_fetch_tracking(url, *args, **kwargs):
             mock_request_tracker.add_request(url, 100)  # 100ms per request
             resp = MagicMock()
@@ -215,9 +207,9 @@ class TestAldiSessionTokenCaching:
         assert stats["total_requests"] >= 1
 
 
+# zip->coords is expensive, caching is critical
 class TestAldiZIPCodeCaching:
-    """Test ZIP code to coordinates caching."""
-
+    # repeated lookups should hit cache
     def test_zip_lookup_cache_hit_rate(
         self,
         cache_mock,
@@ -225,7 +217,6 @@ class TestAldiZIPCodeCaching:
         monkeypatch,
         performance_timer,
     ):
-        """Assert ZIP lookup caching reduces repeated requests."""
         cache_hits_before = cache_mock.hits
 
         # Simulate looking up same ZIP twice
@@ -251,12 +242,12 @@ class TestAldiZIPCodeCaching:
             actual_requests=len(zip_codes),
         )
 
+    # token acquisition is ~300ms, caching saves most of that
     def test_session_token_cache_effectiveness(
         self,
         cache_mock,
         performance_timer,
     ):
-        """Assert session token caching provides significant speedup."""
         # Simulate 5 searches with reused token
         for i in range(5):
             token_key = f"session_token_10001"
@@ -278,14 +269,13 @@ class TestAldiZIPCodeCaching:
         assert hit_rate >= 70, f"Token cache hit rate too low: {hit_rate}%"
 
 
+# validates optimization work is actually helping
 class TestAldiMultiRequestOptimization:
-    """Test request consolidation and optimization."""
-
+    # consolidating requests should save >20%
     def test_aldi_request_consolidation_savings(
         self,
         performance_timer,
     ):
-        """Measure savings from request consolidation."""
         # Baseline: 7 separate requests at ~100ms each = ~700ms
         separate_time = 700
 
@@ -298,11 +288,11 @@ class TestAldiMultiRequestOptimization:
         assert savings_pct > 20, "Consolidation should save >20%"
         assert savings_ms == 200
 
+    # warm path should be >50% faster than cold
     def test_aldi_cached_session_latency_improvement(
         self,
         performance_timer,
     ):
-        """Assert cached session provides significant speedup."""
         cold_start_ms = 4000
         cached_session_ms = 1600  # From target baseline
 
@@ -310,16 +300,14 @@ class TestAldiMultiRequestOptimization:
         assert improvement_pct > 50, f"Cached session should improve >50%, got {improvement_pct}%"
 
 
+# blocks pr if aldi search got slower
 class TestAldiSearchRegressions:
-    """Regression tests vs baselines."""
-
     def test_aldi_no_regression_cold_start(
         self,
         mock_http_with_delay,
         performance_timer,
         perf_baseline,
     ):
-        """Assert no regression in cold start latency."""
         baseline = perf_baseline.get_baseline("aldi_cold_start_latency")
         if baseline is None:
             pytest.skip("Baseline not established yet")

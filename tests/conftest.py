@@ -8,9 +8,8 @@ import pytest
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
+# mimics scrapling response for tests without network calls
 class MockPage:
-    """Mock scrapling page response object."""
-
     def __init__(
         self,
         status: int = 200,
@@ -32,8 +31,8 @@ class MockPage:
             return self._json_data
         return json.loads(self.body)
 
+    # parses script tags from html body to support search extraction tests
     def css(self, selector: str):
-        """Mock CSS selector - returns list of MockElement."""
         if selector == "script#__NEXT_DATA__":
             match = re.search(
                 r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
@@ -51,17 +50,15 @@ class MockPage:
         return []
 
 
+# simple text container for css selector results
 class MockElement:
-    """Mock HTML element."""
-
     def __init__(self, text: str = ""):
         self.text = text
 
 
+# loads test data files from fixtures directory
 @pytest.fixture
 def load_fixture():
-    """Factory fixture to load JSON/HTML fixtures by path."""
-
     def _load(relative_path: str) -> str | dict:
         fixture_path = FIXTURES_DIR / relative_path
         content = fixture_path.read_text(encoding="utf-8")
@@ -72,36 +69,36 @@ def load_fixture():
     return _load
 
 
+# returns class for tests to instantiate with custom params
 @pytest.fixture
 def mock_page_factory():
-    """Factory to create MockPage instances."""
     return MockPage
 
 
+# patches http fetcher at app level for search tests
 @pytest.fixture
 def mock_fetcher(mocker):
-    """Mock app.utils.fetcher.fetch to return MockPage instances."""
     return mocker.patch("app.utils.fetcher.fetch")
 
 
+# patches at scrapling level when app-level patch is insufficient
 @pytest.fixture
 def mock_scrapling_fetcher(mocker):
-    """Mock scrapling.fetchers.Fetcher.get directly."""
     return mocker.patch("scrapling.fetchers.Fetcher.get")
 
 
+# avoids browser launch overhead in unit tests
 @pytest.fixture
 def mock_stealthy_fetcher(mocker):
-    """Mock scrapling.StealthyFetcher for browser automation tests."""
     mock_sf_class = mocker.patch("scrapling.StealthyFetcher")
     mock_sf_instance = MagicMock()
     mock_sf_class.return_value = mock_sf_instance
     return mock_sf_instance
 
 
+# clears lru_cache to prevent cross-test pollution
 @pytest.fixture
 def mock_requests_get(mocker):
-    """Mock requests.get for utilities using requests directly."""
     from app.utils.zip2loc import get_city_state
     from app.aldi.search_products import get_coordinates
 
@@ -111,9 +108,9 @@ def mock_requests_get(mocker):
     return mocker.patch("requests.get")
 
 
+# minimal fields to pass pydantic validation
 @pytest.fixture
 def sample_product_data():
-    """Minimal valid product data for normalization."""
     return {
         "retailer": "walmart",
         "product_id": "123456",
@@ -122,9 +119,9 @@ def sample_product_data():
     }
 
 
+# minimal fields to pass pydantic validation
 @pytest.fixture
 def sample_location_data():
-    """Minimal valid location data for normalization."""
     return {
         "retailer": "walmart",
         "location_id": "5678",
@@ -132,9 +129,9 @@ def sample_location_data():
     }
 
 
+# shared across retailer price extraction tests
 @pytest.fixture
 def price_extraction_cases():
-    """Common test cases for price extraction functions."""
     return [
         (None, None),
         (9.99, 9.99),

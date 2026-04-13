@@ -1,1 +1,1 @@
-"""Performance testing module for regression detection."""
+# performance testing module for regression detection

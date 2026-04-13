@@ -1,4 +1,4 @@
-"""Integration tests for Walmart product search."""
+# validates walmart search handles various api response shapes
 import json
 
 import pytest
@@ -6,11 +6,10 @@ import pytest
 from app.walmart.search_products import search
 
 
+# verifies search extraction and normalization logic
 class TestWalmartSearch:
-    """Test Walmart search with mocked responses."""
-
+    # builds realistic html for mocking walmart responses
     def _create_next_data_html(self, items):
-        """Helper to create HTML with __NEXT_DATA__ containing items."""
         next_data = {
             "props": {
                 "pageProps": {
@@ -24,8 +23,8 @@ class TestWalmartSearch:
         }
         return f'<script id="__NEXT_DATA__">{json.dumps(next_data)}</script>'
 
+    # ensures pydantic model is applied to search results
     def test_search_returns_normalized_products(self, mock_fetcher, mock_page_factory):
-        """Search returns list of normalized product dicts."""
         items = [
             {
                 "usItemId": "123456",
@@ -51,8 +50,8 @@ class TestWalmartSearch:
         assert product["name"] == "Test Product"
         assert product["price"] == 9.99
 
+    # placeholders pollute results if not filtered
     def test_search_skips_placeholder_products(self, mock_fetcher, mock_page_factory):
-        """Placeholder products are filtered out."""
         items = [
             {
                 "usItemId": "123456",
@@ -74,8 +73,8 @@ class TestWalmartSearch:
         assert len(results) == 1
         assert results[0]["product_id"] == "123456"
 
+    # nameless items break normalization and display
     def test_search_skips_items_without_name(self, mock_fetcher, mock_page_factory):
-        """Items without names are filtered out."""
         items = [
             {
                 "usItemId": "123456",
@@ -101,8 +100,8 @@ class TestWalmartSearch:
         assert len(results) == 1
         assert results[0]["name"] == "Valid Product"
 
+    # prevents excessive memory use and response time
     def test_search_respects_max_results(self, mock_fetcher, mock_page_factory):
-        """max_results limits returned products."""
         items = [
             {"usItemId": str(i), "name": f"Product {i}", "price": i * 1.0}
             for i in range(10)
@@ -114,8 +113,8 @@ class TestWalmartSearch:
 
         assert len(results) == 3
 
+    # store-scoped search should hide products unavailable at that store
     def test_search_with_cookies_filters_by_store(self, mock_fetcher, mock_page_factory):
-        """Products without store fulfillment are filtered when cookies provided."""
         items = [
             {
                 "usItemId": "available",
@@ -139,8 +138,8 @@ class TestWalmartSearch:
         assert len(results) == 1
         assert results[0]["product_id"] == "available"
 
+    # regression test for field extraction after api changes
     def test_search_extracts_all_fields(self, mock_fetcher, mock_page_factory):
-        """All product fields are extracted correctly."""
         items = [
             {
                 "usItemId": "PROD123",
@@ -179,8 +178,8 @@ class TestWalmartSearch:
         assert product["image_url"] == "https://example.com/image.jpg"
         assert "full-product" in product["url"]
 
+    # walmart api sometimes returns string instead of {url: ...}
     def test_search_handles_image_as_string(self, mock_fetcher, mock_page_factory):
-        """Image field can be a string instead of dict."""
         items = [
             {
                 "usItemId": "123",
@@ -195,8 +194,8 @@ class TestWalmartSearch:
 
         assert results[0]["image_url"] == "https://example.com/image.jpg"
 
+    # empty results should not raise exceptions
     def test_search_handles_empty_item_stacks(self, mock_fetcher, mock_page_factory):
-        """Empty item stacks return empty results."""
         html = self._create_next_data_html([])
         mock_fetcher.return_value = mock_page_factory(body=html)
 

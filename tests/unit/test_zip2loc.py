@@ -1,14 +1,13 @@
-"""Unit tests for ZIP code to location lookup."""
+# validates zip lookup handles api responses correctly
 import pytest
 
 from app.utils.zip2loc import get_city_state
 
 
+# ensures lru_cache doesn't hide bugs in response handling
 class TestGetCityState:
-    """Test ZIP to city/state conversion."""
-
+    # happy path: api returns valid location data
     def test_valid_zip_returns_city_state(self, mock_requests_get):
-        """Valid ZIP returns (city, state) tuple."""
         mock_requests_get.return_value.status_code = 200
         mock_requests_get.return_value.json.return_value = {
             "places": [{"place name": "Beverly Hills", "state abbreviation": "CA"}]
@@ -20,8 +19,8 @@ class TestGetCityState:
         assert state == "CA"
         mock_requests_get.assert_called_once()
 
+    # 404 should not crash, just return none
     def test_invalid_zip_returns_none_tuple(self, mock_requests_get):
-        """Invalid ZIP returns (None, None)."""
         mock_requests_get.return_value.status_code = 404
 
         city, state = get_city_state("00000")
@@ -29,8 +28,8 @@ class TestGetCityState:
         assert city is None
         assert state is None
 
+    # edge case: api returns empty places list
     def test_no_places_returns_none_tuple(self, mock_requests_get):
-        """Empty places array returns (None, None)."""
         mock_requests_get.return_value.status_code = 200
         mock_requests_get.return_value.json.return_value = {"places": []}
 
@@ -39,8 +38,8 @@ class TestGetCityState:
         assert city is None
         assert state is None
 
+    # defensive: api might return unexpected schema
     def test_missing_places_key_returns_none_tuple(self, mock_requests_get):
-        """Missing 'places' key returns (None, None)."""
         mock_requests_get.return_value.status_code = 200
         mock_requests_get.return_value.json.return_value = {}
 
@@ -49,8 +48,8 @@ class TestGetCityState:
         assert city is None
         assert state is None
 
+    # ensures we hit the right endpoint format
     def test_calls_correct_api_url(self, mock_requests_get):
-        """API is called with correct URL."""
         mock_requests_get.return_value.status_code = 200
         mock_requests_get.return_value.json.return_value = {
             "places": [{"place name": "Test City", "state abbreviation": "TX"}]
@@ -62,8 +61,8 @@ class TestGetCityState:
         assert "75001" in call_args[0][0]
         assert "zippopotam.us" in call_args[0][0]
 
+    # timeout prevents hanging on slow/unresponsive api
     def test_timeout_is_set(self, mock_requests_get):
-        """Request includes timeout parameter."""
         mock_requests_get.return_value.status_code = 200
         mock_requests_get.return_value.json.return_value = {
             "places": [{"place name": "Test", "state abbreviation": "CA"}]

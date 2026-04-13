@@ -1,19 +1,25 @@
 import re
 import json
+import logging
 import urllib.parse
 
 from scrapling import StealthyFetcher
 
 from app.models import normalize_product
 from app.kroger.constants import SEARCH_URL, BASE_URL
+from app.kroger.browser_pool import get_browser_pool
+
+logger = logging.getLogger(__name__)
+
+_USE_BROWSER_POOL = True
 
 
 class KrogerDataNotFoundError(Exception):
     pass
 
 
+# playwright requires list of {name, value, url} dicts not simple dict
 def _dict_cookies_to_playwright(cookies_dict):
-    """Convert a plain {name: value} cookie dict to Playwright list format."""
     if not cookies_dict:
         return None
     return [
@@ -42,8 +48,8 @@ def get_front_image(images, size='large'):
     return None
 
 
+# kroger returns prices as "USD 2.79" strings, need float for normalization
 def extract_numeric_price(price_value):
-    """Extract numeric price from strings like 'USD 2.79'."""
     if price_value is None:
         return None
     if isinstance(price_value, (int, float)):
@@ -61,8 +67,13 @@ def search(query, cookies=None, location_id=None, max_results=5):
 
     playwright_cookies = _dict_cookies_to_playwright(cookies) if isinstance(cookies, dict) else cookies
 
-    sf = StealthyFetcher()
-    page = sf.fetch(url, cookies=playwright_cookies, headless=True)
+    if _USE_BROWSER_POOL:
+        pool = get_browser_pool()
+        page = pool.fetch(url, cookies=playwright_cookies)
+        logger.debug(f"Kroger search using browser pool (request #{pool.request_count})")
+    else:
+        sf = StealthyFetcher()
+        page = sf.fetch(url, cookies=playwright_cookies, headless=True)
 
     state = extract_initial_state(page)
 

@@ -1,4 +1,4 @@
-"""Performance regression tests for Kroger StealthyFetcher."""
+# validates kroger search with browser automation stays fast
 import pytest
 from unittest.mock import MagicMock
 
@@ -12,11 +12,9 @@ from tests.performance.assertions import (
 pytestmark = pytest.mark.perf
 
 
+# kroger requires stealthyfetcher so inherently slower
 class TestKrogerStealthyFetcherPerformance:
-    """Performance tests for Kroger with StealthyFetcher."""
-
     def _create_kroger_response_html(self, has_products=True):
-        """Create HTML response simulating Kroger page."""
         if not has_products:
             return '<html><body>No products</body></html>'
 
@@ -46,6 +44,7 @@ class TestKrogerStealthyFetcherPerformance:
         </html>
         """
 
+    # browser overhead is ~800-1200ms, this establishes reference
     @pytest.mark.perf_baseline
     def test_kroger_stealthy_search_baseline(
         self,
@@ -53,7 +52,6 @@ class TestKrogerStealthyFetcherPerformance:
         performance_timer,
         perf_baseline,
     ):
-        """Establish baseline for Kroger StealthyFetcher (~3000ms target)."""
         mock_page = MagicMock()
         mock_page.status = 200
         mock_page.css = MagicMock(return_value=[])
@@ -78,12 +76,12 @@ class TestKrogerStealthyFetcherPerformance:
             ),
         )
 
+    # fails if browser overhead grows unexpectedly
     def test_kroger_stealthy_search_latency_under_threshold(
         self,
         mock_http_with_delay,
         performance_timer,
     ):
-        """Assert Kroger StealthyFetcher latency under 3000ms."""
         # StealthyFetcher adds browser overhead (~300-500ms per request)
         with performance_timer() as timer:
             import time
@@ -96,11 +94,11 @@ class TestKrogerStealthyFetcherPerformance:
             message="Kroger StealthyFetcher latency regression",
         )
 
+    # validates browser pool amortizes launch cost
     def test_kroger_browser_pooling_latency_savings(
         self,
         performance_timer,
     ):
-        """Measure latency savings from browser connection pooling."""
         # Single browser instance reused: ~500ms per request
         # Without pooling: ~800ms per request (connection overhead)
         # For 4 requests:
@@ -113,11 +111,11 @@ class TestKrogerStealthyFetcherPerformance:
         assert savings_pct > 25, f"Browser pooling should save >25%, got {savings_pct}%"
         assert savings_ms == 1200
 
+    # sequential searches should be faster than parallel cold starts
     def test_kroger_multiple_search_pooled_efficiency(
         self,
         performance_timer,
     ):
-        """Assert browser pooling efficiency with multiple searches."""
         # Multiple searches with reused browser instance
         measurements = []
         for _ in range(3):
@@ -137,15 +135,14 @@ class TestKrogerStealthyFetcherPerformance:
         assert variance_pct < 50, f"Pooled searches should be consistent (variance: {variance_pct}%)"
 
 
+# validates session/cookie handling doesn't add unnecessary overhead
 class TestKrogerSessionManagement:
-    """Test session and cookie management performance."""
-
+    # session establishment is expensive, reuse should help
     def test_kroger_session_reuse_latency(
         self,
         cache_mock,
         performance_timer,
     ):
-        """Assert session reuse reduces latency."""
         session_overhead = 200  # Time to establish session
         request_time = 100  # Time per request without session setup
 
@@ -168,12 +165,12 @@ class TestKrogerSessionManagement:
         savings_pct = ((total_without_reuse - total_with_reuse) / total_without_reuse) * 100
         assert savings_pct > 40, f"Session reuse should save >40%, got {savings_pct}%"
 
+    # cookie lookups should be fast with caching
     def test_kroger_cookie_persistence_overhead(
         self,
         cache_mock,
         performance_timer,
     ):
-        """Assert cookie caching reduces overhead."""
         # Persistent cache lookups
         cache_hits = 0
         cache_misses = 0
@@ -193,15 +190,13 @@ class TestKrogerSessionManagement:
         assert hit_rate == 80, f"Expected 80% hit rate, got {hit_rate}%"
 
 
+# blocks pr if kroger search got slower
 class TestKrogerSearchRegressions:
-    """Regression tests vs baselines."""
-
     def test_kroger_no_regression_stealthy_latency(
         self,
         performance_timer,
         perf_baseline,
     ):
-        """Assert no regression in Kroger StealthyFetcher latency."""
         baseline = perf_baseline.get_baseline("kroger_stealthy_search_latency")
         if baseline is None:
             pytest.skip("Baseline not established yet")
@@ -217,14 +212,13 @@ class TestKrogerSearchRegressions:
         )
 
 
+# validates json parsing and normalization stay fast
 class TestKrogerPageExtractionPerformance:
-    """Test performance of Kroger-specific data extraction."""
-
+    # regex + json.loads should be <50ms for typical payloads
     def test_initial_state_extraction_latency(
         self,
         performance_timer,
     ):
-        """Measure JSON extraction performance."""
         import json
         import re
 
@@ -253,11 +247,11 @@ class TestKrogerPageExtractionPerformance:
         # Extraction should be <50ms even for large payloads
         assert timer.get_ms() < 100, f"Extraction took {timer.get_ms():.0f}ms"
 
+    # normalization loop should handle 50+ products quickly
     def test_product_field_normalization_latency(
         self,
         performance_timer,
     ):
-        """Measure product normalization performance."""
         products = [
             {
                 "sku": f"sku_{i}",

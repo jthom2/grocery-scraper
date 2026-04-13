@@ -1,4 +1,4 @@
-"""Performance regression tests for Walmart search."""
+# validates walmart search latency stays within acceptable bounds
 import json
 import pytest
 
@@ -12,11 +12,10 @@ from tests.performance.assertions import (
 pytestmark = pytest.mark.perf
 
 
+# walmart uses simple http fetch, should be fastest retailer
 class TestWalmartSearchPerformance:
-    """Performance tests for Walmart product search."""
-
+    # builds html matching walmart's __NEXT_DATA__ structure
     def _create_next_data_html(self, items, count=20):
-        """Create HTML with __NEXT_DATA__ containing items."""
         next_data = {
             "props": {
                 "pageProps": {
@@ -31,7 +30,6 @@ class TestWalmartSearchPerformance:
         return f'<script id="__NEXT_DATA__">{json.dumps(next_data)}</script>'
 
     def _create_sample_items(self, count=20):
-        """Create sample product items for testing."""
         return [
             {
                 "usItemId": f"prod_{i}",
@@ -47,6 +45,7 @@ class TestWalmartSearchPerformance:
             for i in range(count)
         ]
 
+    # establishes reference point for regression detection
     @pytest.mark.perf_baseline
     def test_walmart_search_latency_baseline(
         self,
@@ -55,7 +54,6 @@ class TestWalmartSearchPerformance:
         performance_timer,
         perf_baseline,
     ):
-        """Establish baseline for Walmart search latency (~650ms target)."""
         items = self._create_sample_items(count=20)
         html = self._create_next_data_html(items)
         mock_fetcher.return_value = mock_page_factory(body=html)
@@ -75,13 +73,13 @@ class TestWalmartSearchPerformance:
             ),
         )
 
+    # fails ci if search slows down
     def test_walmart_search_latency_under_threshold(
         self,
         mock_fetcher,
         mock_page_factory,
         performance_timer,
     ):
-        """Assert Walmart search latency stays under 650ms threshold."""
         items = self._create_sample_items(count=20)
         html = self._create_next_data_html(items)
         mock_fetcher.return_value = mock_page_factory(body=html)
@@ -97,13 +95,13 @@ class TestWalmartSearchPerformance:
             message="Walmart search latency regression detected",
         )
 
+    # store filtering adds cpu work, verify it stays fast
     def test_walmart_search_with_store_filter_latency(
         self,
         mock_fetcher,
         mock_page_factory,
         performance_timer,
     ):
-        """Assert Walmart store-filtered search maintains latency."""
         items = self._create_sample_items(count=30)
         for i, item in enumerate(items):
             if i % 2 == 0:
@@ -122,13 +120,13 @@ class TestWalmartSearchPerformance:
         assert len(results) == 5
         assert_latency_under(timer.get_ms(), threshold_ms=700, tolerance_pct=10)
 
+    # large results shouldn't blow up latency
     def test_walmart_search_large_result_set_latency(
         self,
         mock_fetcher,
         mock_page_factory,
         performance_timer,
     ):
-        """Assert performance with large result sets."""
         items = self._create_sample_items(count=100)
         html = self._create_next_data_html(items, count=100)
         mock_fetcher.return_value = mock_page_factory(body=html)
@@ -139,13 +137,13 @@ class TestWalmartSearchPerformance:
         assert len(results) == 10
         assert_latency_under(timer.get_ms(), threshold_ms=750, tolerance_pct=10)
 
+    # flaky performance indicates caching or gc issues
     def test_walmart_search_multiple_runs_consistency(
         self,
         mock_fetcher,
         mock_page_factory,
         performance_timer,
     ):
-        """Assert search performance is consistent across runs."""
         items = self._create_sample_items(count=20)
         html = self._create_next_data_html(items)
         mock_fetcher.return_value = mock_page_factory(body=html)
@@ -169,11 +167,9 @@ class TestWalmartSearchPerformance:
         )
 
 
+# compares current performance against stored baselines
 class TestWalmartSearchRegressions:
-    """Regression tests comparing against baselines."""
-
     def _create_next_data_html(self, items):
-        """Create HTML with __NEXT_DATA__."""
         next_data = {
             "props": {
                 "pageProps": {
@@ -188,7 +184,6 @@ class TestWalmartSearchRegressions:
         return f'<script id="__NEXT_DATA__">{json.dumps(next_data)}</script>'
 
     def _create_sample_items(self, count=20):
-        """Create sample items."""
         return [
             {
                 "usItemId": f"prod_{i}",
@@ -200,6 +195,7 @@ class TestWalmartSearchRegressions:
             for i in range(count)
         ]
 
+    # blocks pr if performance degraded more than 20%
     def test_walmart_no_regression_vs_baseline(
         self,
         mock_fetcher,
@@ -207,7 +203,6 @@ class TestWalmartSearchRegressions:
         performance_timer,
         perf_baseline,
     ):
-        """Assert no regression vs Walmart baseline."""
         baseline = perf_baseline.get_baseline("walmart_search_latency")
         if baseline is None:
             pytest.skip("Baseline not established yet")
