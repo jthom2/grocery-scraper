@@ -6,6 +6,7 @@ from functools import lru_cache
 
 from app.models import normalize_product
 from app.utils import fetcher
+from app.utils.cache import TTLCache
 from app.aldi.constants import (
     BASE_URL,
     SEARCH_URL,
@@ -21,11 +22,10 @@ from app.aldi.constants import (
 )
 
 
-ITEM_ID_PATTERN = re.compile(r'^items_[0-9]+-[0-9]+$')
+ITEM_ID_PATTERN = re.compile(r'"(items_[0-9]+-[0-9]+)"')
 PRICE_PATTERN = re.compile(r"\$([0-9]+(?:\.[0-9]+)?)")
 
-_SESSION_TOKEN_CACHE_TTL_SECONDS = 15 * 60
-_SESSION_TOKEN_CACHE = {}
+_SESSION_TOKEN_CACHE = TTLCache(ttl_seconds=15 * 60)
 
 
 def run_persisted_query(operation_name, variables, query_hash, cookies, referer):
@@ -91,12 +91,9 @@ def get_default_zip(cookies, referer):
 
 def get_retailer_inventory_session_token(zip_code, latitude, longitude, cookies, referer):
     cache_key = f"{zip_code}:{latitude}:{longitude}"
-    now = time.time()
-
-    if cache_key in _SESSION_TOKEN_CACHE:
-        cached = _SESSION_TOKEN_CACHE[cache_key]
-        if cached['expires_at'] > now:
-            return cached['token'], cached['shop_id']
+    cached = _SESSION_TOKEN_CACHE.get(cache_key)
+    if cached:
+        return cached['token'], cached['shop_id']
 
     data = run_persisted_query(
         operation_name='ShopCollectionScoped',
@@ -114,12 +111,7 @@ def get_retailer_inventory_session_token(zip_code, latitude, longitude, cookies,
     if not data:
         return None, None
 
-    shops = (
-        data
-        .get('shopCollection', {})
-        .get('shops', [])
-    )
-
+    shops = data.get('shopCollection', {}).get('shops', [])
     if not shops:
         return None, None
 
@@ -127,12 +119,7 @@ def get_retailer_inventory_session_token(zip_code, latitude, longitude, cookies,
     token = shop.get('retailerInventorySessionToken')
     shop_id = str(shop.get('id'))
 
-    _SESSION_TOKEN_CACHE[cache_key] = {
-        'token': token,
-        'shop_id': shop_id,
-        'expires_at': now + _SESSION_TOKEN_CACHE_TTL_SECONDS,
-    }
-
+    _SESSION_TOKEN_CACHE.set(cache_key, {'token': token, 'shop_id': shop_id})
     return token, shop_id
 
 
@@ -185,37 +172,14 @@ def fetch_search_placements(query, zip_code, shop_id, token, cookies, referer, m
     if not data:
         return []
 
-    return (
-        data
-        .get('searchResultsPlacements', {})
-        .get('placements', [])
-    )
+    return data.get('searchResultsPlacements', {}).get('placements', [])
 
 
 def extract_item_ids(placements, max_ids=40):
-    item_ids = []
-    seen_ids = set()
-
-    def walk(value):
-        if len(item_ids) >= max_ids:
-            return
-
-        if isinstance(value, dict):
-            for nested in value.values():
-                walk(nested)
-            return
-
-        if isinstance(value, list):
-            for nested in value:
-                walk(nested)
-            return
-
-        if isinstance(value, str) and ITEM_ID_PATTERN.match(value) and value not in seen_ids:
-            item_ids.append(value)
-            seen_ids.add(value)
-
-    walk(placements)
-    return item_ids
+    text = json.dumps(placements)
+    # Deduplicate while preserving order using a dictionary
+    item_ids = list(dict.fromkeys(ITEM_ID_PATTERN.findall(text)))
+    return item_ids[:max_ids]
 
 
 def fetch_items(item_ids, shop_id, zip_code, cookies, referer):
@@ -286,21 +250,18 @@ def build_search_context(query, location_id=None, zip_code=None):
 
 def normalize_item(item, location_id):
     _get = item.get
-
+    view_section = _get('viewSection') or {}
     price_view = (_get('price') or {}).get('viewSection', {})
     item_card = price_view.get('itemCard', {})
     item_details = price_view.get('itemDetails', {})
     availability = _get('availability') or {}
     availability_view = availability.get('viewSection', {})
     rating_data = _get('productRating') or {}
-    view_section = _get('viewSection') or {}
+
     image = (view_section.get('itemImage') or {}).get('url')
-
-    price_display = item_card.get('priceString') or item_details.get('priceString')
-    unit_price = item_details.get('pricePerUnitString') or item_card.get('pricePerUnitString')
-    was_price = item_card.get('fullPriceString') or item_details.get('fullPriceString')
     evergreen_url = _get('evergreenUrl')
-
+    price_display = item_card.get('priceString') or item_details.get('priceString')
+    
     return normalize_product({
         'retailer': 'aldi',
         'location_id': str(location_id) if location_id else None,
@@ -310,9 +271,9 @@ def normalize_item(item, location_id):
         'size': _get('size'),
         'price': parse_price(price_display),
         'price_display': price_display,
-        'unit_price': unit_price,
+        'unit_price': item_details.get('pricePerUnitString') or item_card.get('pricePerUnitString'),
         'promo_price': None,
-        'was_price': was_price,
+        'was_price': item_card.get('fullPriceString') or item_details.get('fullPriceString'),
         'rating': rating_data.get('averageStarRating') or rating_data.get('averageRating'),
         'reviews': rating_data.get('ratingCount') or rating_data.get('numberOfRatings'),
         'image_url': image,
@@ -321,6 +282,7 @@ def normalize_item(item, location_id):
         'availability': availability_view.get('stockLevelLabelString'),
         'url': f"{BASE_URL}/store/aldi/products/{evergreen_url}" if evergreen_url else None,
     })
+
 
 
 def search(query, location_id=None, zip_code=None, max_results=5):

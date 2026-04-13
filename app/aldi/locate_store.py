@@ -3,151 +3,106 @@ import requests
 
 from app.models import normalize_location
 from app.utils import fetcher, store_selection
+from app.utils.cache import TTLCache
 from app.aldi.constants import SEARCH_URL, STORE_FRONT_URL, IDP_SHOPS_URL
 
-#       alt url 'https://info.aldi.us/stores/l/{state_abbrv}/{city}' <- cant get this to work
-
-_COOKIE_CACHE_TTL_SECONDS = 15 * 60
-_REQUEST_TIMEOUT_SECONDS = 8
+_SESSION_CACHE = TTLCache(ttl_seconds=15 * 60)
+_REQUEST_TIMEOUT = 8
 _SESSION = requests.Session()
-_COOKIE_CACHE = {
-    'cookies': None,
-    'expires_at': 0.0,
-    'referer': SEARCH_URL,
-    'instacart_sid': None,
-}
 
 
-def _prime_instacart_sid(force_refresh=False):
-    now = time.time()
-    if (
-        not force_refresh
-        and _COOKIE_CACHE['instacart_sid']
-        and _COOKIE_CACHE['expires_at'] > now
-    ):
-        return _COOKIE_CACHE['instacart_sid']
+def _prime_session(force_refresh=False):
+    cached = _SESSION_CACHE.get('session')
+    if cached and not force_refresh:
+        return cached
 
-    warmup = _SESSION.get(
-        SEARCH_URL,
-        timeout=_REQUEST_TIMEOUT_SECONDS,
-        headers={"Referer": SEARCH_URL},
-    )
-    if warmup.status_code != 200:
-        return None
-
+    # Attempt to get instacart_sid first via requests (faster)
+    warmup = _SESSION.get(SEARCH_URL, timeout=_REQUEST_TIMEOUT, headers={"Referer": SEARCH_URL})
     instacart_sid = _SESSION.cookies.get('__Host-instacart_sid')
-    if not instacart_sid:
-        return None
 
-    _COOKIE_CACHE['instacart_sid'] = instacart_sid
-    _COOKIE_CACHE['expires_at'] = now + _COOKIE_CACHE_TTL_SECONDS
-    return instacart_sid
-
-
-def _prime_store_session(force_refresh=False):
-    now = time.time()
-    if (
-        not force_refresh
-        and _COOKIE_CACHE['cookies']
-        and _COOKIE_CACHE['expires_at'] > now
-    ):
-        return _COOKIE_CACHE['cookies'], _COOKIE_CACHE['referer']
-
+    # Also get full cookies/referer via fetcher for fallback path
     entry = fetcher.fetch(SEARCH_URL)
     referer = SEARCH_URL
     if entry.status != 200:
         entry = fetcher.fetch(STORE_FRONT_URL)
         referer = STORE_FRONT_URL
 
-    if entry.status != 200:
-        return None, referer
-
-    _COOKIE_CACHE['cookies'] = entry.cookies
-    _COOKIE_CACHE['expires_at'] = now + _COOKIE_CACHE_TTL_SECONDS
-    _COOKIE_CACHE['referer'] = referer
-    return entry.cookies, referer
+    session_data = {
+        'cookies': entry.cookies if entry.status == 200 else None,
+        'referer': referer,
+        'instacart_sid': instacart_sid
+    }
+    _SESSION_CACHE.set('session', session_data)
+    return session_data
 
 
 def _fetch_shops_direct(zip_code, force_refresh=False):
-    instacart_sid = _prime_instacart_sid(force_refresh=force_refresh)
-    if not instacart_sid:
+    session = _prime_session(force_refresh=force_refresh)
+    if not session['instacart_sid']:
         return None
 
     response = _SESSION.get(
         IDP_SHOPS_URL,
         params={'postal_code': zip_code},
-        cookies={'__Host-instacart_sid': instacart_sid},
+        cookies={'__Host-instacart_sid': session['instacart_sid']},
         headers={"Referer": SEARCH_URL},
-        timeout=_REQUEST_TIMEOUT_SECONDS,
+        timeout=_REQUEST_TIMEOUT,
     )
 
     if response.status_code == 401 and not force_refresh:
         return _fetch_shops_direct(zip_code, force_refresh=True)
 
-    if response.status_code != 200:
+    try:
+        return response.json().get('shops', []) if response.status_code == 200 else None
+    except (ValueError, AttributeError):
         return None
 
-    try:
-        return response.json().get('shops', [])
-    except ValueError:
-        return None
 
 def get_stores(zip_code, max_results=10):
     shops_data = _fetch_shops_direct(zip_code)
+    
+    # Fallback to fetcher if direct requests failed
     if shops_data is None:
-        cookies, referer = _prime_store_session()
-        if not cookies:
+        session = _prime_session()
+        if not session['cookies']:
             return []
+            
         page = fetcher.fetch(
             IDP_SHOPS_URL,
             params={'postal_code': zip_code},
-            cookies=cookies,
-            headers={"Referer": referer},
+            cookies=session['cookies'],
+            headers={"Referer": session['referer']},
         )
         if page.status == 401:
-            cookies, referer = _prime_store_session(force_refresh=True)
-            if not cookies:
-                return []
+            session = _prime_session(force_refresh=True)
             page = fetcher.fetch(
                 IDP_SHOPS_URL,
                 params={'postal_code': zip_code},
-                cookies=cookies,
-                headers={"Referer": referer},
+                cookies=session['cookies'],
+                headers={"Referer": session['referer']},
             )
-        if page.status != 200:
-            return []
-        shops_data = page.json().get('shops', [])
+        shops_data = page.json().get('shops', []) if page.status == 200 else []
+
     stores = []
-
-    for shop in shops_data[:max_results]:
-        _get = shop.get
-        address = _get('address', {})
-        _get_address = address.get
-
-        street = _get_address('street_address', '')
-        city = _get_address('city', '')
-        state = _get_address('state', '')
-        postal = _get_address('postal_code', '')
-
-        address_line = f"{street}, {city}, {state} {postal}".strip(", ")
-        city_state_zip = f"{city}, {state} {postal}".strip(", ")
-
+    for shop in (shops_data or [])[:max_results]:
+        addr = shop.get('address', {})
+        street, city, state, postal = addr.get('street_address', ''), addr.get('city', ''), addr.get('state', ''), addr.get('postal_code', '')
+        
         stores.append(normalize_location({
             'retailer': 'aldi',
-            'name': _get('location_name') or _get('name') or 'ALDI',
-            'location_id': str(_get('id')),
-            'address': address_line or None,
+            'name': shop.get('location_name') or shop.get('name') or 'ALDI',
+            'location_id': str(shop.get('id')),
+            'address': f"{street}, {city}, {state} {postal}".strip(", ") or None,
             'city': city or None,
             'state': state or None,
             'postal_code': postal or None,
-            'phone': _get('phone_number'),
-            'service_type': _get('fulfillment_option'),
+            'phone': shop.get('phone_number'),
+            'service_type': shop.get('fulfillment_option'),
             'metadata': {
-                'location_code': _get('location_code'),
-                'city_state_zip': city_state_zip,
+                'location_code': shop.get('location_code'),
+                'city_state_zip': f"{city}, {state} {postal}".strip(", "),
             },
         }))
-
     return stores
 
 
@@ -176,28 +131,20 @@ def find_and_select_store():
 
     display_stores(stores, zip_code)
     selected = store_selection.select_from_list(stores)
-
-    if selected:
-        return selected['location_id'], zip_code
-
-    return None, None
+    return (selected['location_id'], zip_code) if selected else (None, None)
 
 
 if __name__ == "__main__":
-    try:
-        zip_code = input("ZIP: ").strip()
-        clk = time.time()
-        stores = get_stores(zip_code)
+    zip_in = input("ZIP: ").strip()
+    start = time.time()
+    results = get_stores(zip_in)
+    if results:
+        display_stores(results, zip_in)
+        print(f"\nDone in {time.time() - start:.2f}s")
+        sel = store_selection.select_from_list(results)
+        if sel:
+            print(f"\nSelected: {sel['name']}\nLocation ID: {sel['location_id']}")
+    else:
+        print("No stores found.")
 
-        if not stores:
-            print("No Aldi stores found.")
-        else:
-            display_stores(stores, zip_code)
-            print(f"\nDone in {time.time() - clk:.2f}s")                # 2.40, 1.99, 2.99, 2.31   avg~2.40
-            selected = store_selection.select_from_list(stores)
-            if selected:
-                print(f"\nSelected: {selected['name']}")
-                print(f"Location ID: {selected['location_id']}")
-    except:
-        pass
 
