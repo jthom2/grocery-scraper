@@ -1,11 +1,17 @@
 from urllib.parse import quote
 
 from app.models import normalize_location
-from app.utils import zip2loc, get_next_data, fetcher, store_selection
+from app.utils import zip2loc, get_next_data, fetcher, store_selection, display
+from app.utils.store_cache import store_cache
 from app.walmart.constants import STORE_DIRECTORY_URL
 
 
+# converts zip code to city/state and fetches nearby walmart store locations
 def find_stores(zip_code, max_stores=4):
+    # attempt to retrieve from cache (Cache-Aside: Read)
+    if cached_stores := store_cache.get('walmart', zip_code):
+        return cached_stores[:max_stores]
+
     city, state = zip2loc.get_city_state(zip_code)
 
     if not city or not state:
@@ -56,20 +62,19 @@ def find_stores(zip_code, max_stores=4):
             },
         }))
 
+    # store in cache for 24 hours (Cache-Aside: Write)
+    if stores:
+        store_cache.set('walmart', zip_code, stores)
+
     return stores
 
 
+# formats and prints store locations in a human-readable table layout
 def display_stores(stores, zip_code):
-    print(f"\n{'='*50}")
-    print(f"Walmart Stores near {zip_code}")
-    print(f"{'='*50}")
-
-    for i, store in enumerate(stores, start=1):
-        print(f"{i}. {store['name']}")
-        print(f"   Location ID: {store['location_id']}")
-        print(f"   Address: {store['address']}\n")
+    display.display_stores(stores, zip_code, "Walmart")
 
 
+# prompts for zip code, fetches stores, and returns selected store location and zip code
 def find_and_select_store():
     zip_code = input("Enter zip code: ")
     stores = find_stores(zip_code)

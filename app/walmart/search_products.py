@@ -1,9 +1,19 @@
 from app.models import normalize_product
-from app.utils import get_next_data, fetcher
+from app.utils import get_next_data, fetcher, display
+from app.utils.product_cache import product_cache
 from app.walmart.constants import REFERER, SEARCH_URL, BASE_URL
 
 
+# fetches and normalizes walmart product search results with optional store filtering
 def search(query, cookies=None, location_id=None, max_results=5):
+    # resolve store_id for cache key consistency
+    cookie_store_id = str(cookies.get('assortmentStoreId')) if cookies and cookies.get('assortmentStoreId') else None
+    store_id = str(location_id) if location_id else cookie_store_id
+
+    # attempt to retrieve from cache (Cache-Aside: Read)
+    if store_id and (cached_results := product_cache.get('walmart', store_id, query)):
+        return cached_results[:max_results]
+
     headers = {"Referer": REFERER}
 
     page = fetcher.fetch(SEARCH_URL, params={'q': query}, cookies=cookies, headers=headers)
@@ -25,12 +35,11 @@ def search(query, cookies=None, location_id=None, max_results=5):
             if not (name := item.get('name')) or item.get('__typename') == 'SearchPlaceholderProduct':
                 continue
 
-            if cookies and (store_id := cookies.get('assortmentStoreId')):
+            if cookies and (cookie_sid := cookies.get('assortmentStoreId')):
                 fulfillment_opts = item.get('fulfillmentSummary') or []
-                is_in_store = any(str(f.get('storeId')) == str(store_id) for f in fulfillment_opts)
+                is_in_store = any(str(f.get('storeId')) == str(cookie_sid) for f in fulfillment_opts)
                 if not is_in_store:
                     continue
-            cookie_store_id = str(cookies.get('assortmentStoreId')) if cookies and cookies.get('assortmentStoreId') else None
 
             _get = item.get
             rating_data = _get('rating') or {}
@@ -63,19 +72,16 @@ def search(query, cookies=None, location_id=None, max_results=5):
             }))
             result_count += 1
 
+    # store in cache for 12 hours (Cache-Aside: Write)
+    if store_id and results:
+        product_cache.set('walmart', store_id, query, results)
+
     return results
 
 
+# formats and prints search results in a human-readable table layout
 def display_results(results, query):
-    print(f"\n{'='*60}")
-    print(f"Found {len(results)} products for '{query}'")
-    print(f"{'='*60}\n")
-
-    for i, product in enumerate(results, start=1):
-        print(f"{i}. {product['name']}")
-        print(f"   Price: {product['price_display'] or product['price'] or 'N/A'}")
-        print(f"   In Stock: {product['in_stock']}")
-        print(f"   URL: {product['url']}\n")
+    display.display_products(results, query, "Walmart")
 
 
 if __name__ == "__main__":

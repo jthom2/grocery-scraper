@@ -11,7 +11,10 @@ dependencies = [
     "anyio>=4.13.0",
     "browserforge>=1.2.4",
     "curl-cffi>=0.14.0",
+    "graphifyy>=0.4.8",
+    "orjson>=3.11.8",
     "playwright>=1.58.0",
+    "redis>=7.4.0",
     "requests>=2.33.1",
     "scrapling[all]>=0.4.3",
 ]
@@ -21,6 +24,34 @@ walmart-search = "app.walmart.store_search:main"
 kroger-search = "app.kroger.store_search:main"
 publix-search = "app.publix.store_search:main"
 aldi-search = "app.aldi.store_search:main"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-mock>=3.12.0",
+    "pytest-cov>=4.1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = ["-v", "--strict-markers", "-ra"]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests with mocked HTTP",
+    "perf: Performance regression tests",
+    "perf_baseline: Performance baseline establishment tests",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/*/store_search.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "if __name__ == .__main__.:",
+    "pragma: no cover",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

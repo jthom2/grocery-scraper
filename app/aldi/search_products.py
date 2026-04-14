@@ -1,9 +1,13 @@
-import json
+import orjson
 import re
 import uuid
+import time
+from functools import lru_cache
 
-from app.models import normalize_product
-from app.utils import fetcher
+from app.utils import fetcher, display
+from app.utils.cache import TTLCache
+from app.utils.product_cache import product_cache
+from app.aldi.parser import normalize_item, parse_price
 from app.aldi.constants import (
     BASE_URL,
     SEARCH_URL,
@@ -19,6 +23,42 @@ from app.aldi.constants import (
 )
 
 
+ITEM_ID_PATTERN = re.compile(r'"(items_[0-9]+-[0-9]+)"')
+
+_SESSION_TOKEN_CACHE = TTLCache(ttl_seconds=15 * 60)
+
+
+# executes a graphql persisted query and returns the data payload or empty dict on error
+def run_persisted_query(operation_name, variables, query_hash, cookies, referer):
+    params = {
+        'operationName': operation_name,
+        'variables': orjson.dumps(variables).decode(),
+        'extensions': orjson.dumps({
+            'persistedQuery': {
+                'version': 1,
+                'sha256Hash': query_hash,
+            }
+        }).decode(),
+    }
+
+    page = fetcher.fetch(
+        GRAPHQL_URL,
+        params=params,
+        cookies=cookies,
+        headers={"Referer": referer},
+    )
+    if page.status != 200:
+        return None
+
+    payload = page.json()
+    if payload.get('errors'):
+        return None
+
+    return payload.get('data') or {}
+
+
+# looks up latitude and longitude for a given zip code using geolocation api
+@lru_cache(maxsize=256)
 def get_coordinates(zip_code):
     page = fetcher.fetch(f'{ZIP_LOOKUP_URL}/{zip_code}')
 
@@ -38,6 +78,7 @@ def get_coordinates(zip_code):
         return None, None
 
 
+# retrieves the user's default zip code from aldi's location endpoint
 def get_default_zip(cookies, referer):
     page = fetcher.fetch(
         IDP_LOCATION_URL,
@@ -51,278 +92,202 @@ def get_default_zip(cookies, referer):
     return page.json().get('postal_code')
 
 
+# fetches and caches retailer inventory session token and shop id for search authorization
 def get_retailer_inventory_session_token(zip_code, latitude, longitude, cookies, referer):
-    variables = {
-        'retailerSlug': RETAILER_SLUG,
-        'postalCode': zip_code,
-        'coordinates': {'latitude': latitude, 'longitude': longitude},
-        'addressId': None,
-        'allowCanonicalFallback': True,
-    }
-    extensions = {
-        'persistedQuery': {
-            'version': 1,
-            'sha256Hash': SHOP_COLLECTION_SCOPED_HASH,
-        }
-    }
-    params = {
-        'operationName': 'ShopCollectionScoped',
-        'variables': json.dumps(variables, separators=(',', ':')),
-        'extensions': json.dumps(extensions, separators=(',', ':')),
-    }
+    cache_key = f"{zip_code}:{latitude}:{longitude}"
+    cached = _SESSION_TOKEN_CACHE.get(cache_key)
+    if cached:
+        return cached['token'], cached['shop_id']
 
-    page = fetcher.fetch(
-        GRAPHQL_URL,
-        params=params,
+    data = run_persisted_query(
+        operation_name='ShopCollectionScoped',
+        variables={
+            'retailerSlug': RETAILER_SLUG,
+            'postalCode': zip_code,
+            'coordinates': {'latitude': latitude, 'longitude': longitude},
+            'addressId': None,
+            'allowCanonicalFallback': True,
+        },
+        query_hash=SHOP_COLLECTION_SCOPED_HASH,
         cookies=cookies,
-        headers={"Referer": referer},
+        referer=referer,
     )
+    if not data:
+        return None, None
 
-    if page.status != 200:
-        return None
-
-    data = page.json()
-    if data.get('errors'):
-        return None
-
-    shops = (
-        data.get('data', {})
-        .get('shopCollection', {})
-        .get('shops', [])
-    )
-
+    shops = data.get('shopCollection', {}).get('shops', [])
     if not shops:
-        return None
+        return None, None
 
-    return shops[0].get('retailerInventorySessionToken')
+    shop = shops[0]
+    token = shop.get('retailerInventorySessionToken')
+    shop_id = str(shop.get('id'))
 
-
-def get_default_shop_id(zip_code, cookies, referer):
-    page = fetcher.fetch(
-        IDP_SHOPS_URL,
-        params={'postal_code': zip_code},
-        cookies=cookies,
-        headers={"Referer": referer},
-    )
-
-    if page.status != 200:
-        return None
-
-    shops = page.json().get('shops', [])
-    if not shops:
-        return None
-
-    return str(shops[0].get('id'))
+    _SESSION_TOKEN_CACHE.set(cache_key, {'token': token, 'shop_id': shop_id})
+    return token, shop_id
 
 
+# queries the search api and retrieves product placement data for a given search term
 def fetch_search_placements(query, zip_code, shop_id, token, cookies, referer, max_results=5):
-    variables = {
-        'filters': [],
-        'action': None,
-        'query': query,
-        'pageViewId': str(uuid.uuid4()),
-        'retailerInventorySessionToken': token,
-        'elevatedProductId': None,
-        'searchSource': 'search',
-        'disableReformulation': False,
-        'disableLlm': False,
-        'forceInspiration': False,
-        'orderBy': 'bestMatch',
-        'clusterId': None,
-        'includeDebugInfo': False,
-        'clusteringStrategy': None,
-        'contentManagementSearchParams': {'itemGridColumnCount': 3},
-        'shopId': str(shop_id),
-        'postalCode': zip_code,
-        'zoneId': DEFAULT_ZONE_ID,
-        'first': max(max_results, 4),
-    }
-    extensions = {
-        'persistedQuery': {
-            'version': 1,
-            'sha256Hash': SEARCH_RESULTS_PLACEMENTS_HASH,
-        }
-    }
-    params = {
-        'operationName': 'SearchResultsPlacements',
-        'variables': json.dumps(variables, separators=(',', ':')),
-        'extensions': json.dumps(extensions, separators=(',', ':')),
-    }
-
-    page = fetcher.fetch(
-        GRAPHQL_URL,
-        params=params,
+    data = run_persisted_query(
+        operation_name='SearchResultsPlacements',
+        variables={
+            'filters': [],
+            'action': None,
+            'query': query,
+            'pageViewId': str(uuid.uuid4()),
+            'retailerInventorySessionToken': token,
+            'elevatedProductId': None,
+            'searchSource': 'search',
+            'disableReformulation': False,
+            'disableLlm': False,
+            'forceInspiration': False,
+            'orderBy': 'bestMatch',
+            'clusterId': None,
+            'includeDebugInfo': False,
+            'clusteringStrategy': None,
+            'contentManagementSearchParams': {'itemGridColumnCount': 3},
+            'shopId': str(shop_id),
+            'postalCode': zip_code,
+            'zoneId': DEFAULT_ZONE_ID,
+            'first': max(max_results, 4),
+        },
+        query_hash=SEARCH_RESULTS_PLACEMENTS_HASH,
         cookies=cookies,
-        headers={"Referer": referer},
+        referer=referer,
     )
-
-    if page.status != 200:
+    if not data:
         return []
 
-    data = page.json()
-    if data.get('errors'):
-        return []
-
-    return (
-        data.get('data', {})
-        .get('searchResultsPlacements', {})
-        .get('placements', [])
-    )
+    return data.get('searchResultsPlacements', {}).get('placements', [])
 
 
+# extracts unique product item ids from search placements using regex pattern matching
 def extract_item_ids(placements, max_ids=40):
-    item_ids = []
-    item_id_pattern = re.compile(r'^items_[0-9]+-[0-9]+$')
-
-    def walk(value):
-        if len(item_ids) >= max_ids:
-            return
-
-        if isinstance(value, dict):
-            for nested in value.values():
-                walk(nested)
-            return
-
-        if isinstance(value, list):
-            for nested in value:
-                walk(nested)
-            return
-
-        if isinstance(value, str) and item_id_pattern.match(value) and value not in item_ids:
-            item_ids.append(value)
-
-    walk(placements)
-    return item_ids
+    text = orjson.dumps(placements).decode()
+    # Deduplicate while preserving order using a dictionary
+    item_ids = list(dict.fromkeys(ITEM_ID_PATTERN.findall(text)))
+    return item_ids[:max_ids]
 
 
+# fetches detailed product information for a list of item ids
 def fetch_items(item_ids, shop_id, zip_code, cookies, referer):
-    variables = {
-        'ids': item_ids,
-        'shopId': str(shop_id),
-        'zoneId': DEFAULT_ZONE_ID,
-        'postalCode': zip_code,
-    }
-    extensions = {
-        'persistedQuery': {
-            'version': 1,
-            'sha256Hash': ITEMS_HASH,
-        }
-    }
-    params = {
-        'operationName': 'Items',
-        'variables': json.dumps(variables, separators=(',', ':')),
-        'extensions': json.dumps(extensions, separators=(',', ':')),
-    }
-
-    page = fetcher.fetch(
-        GRAPHQL_URL,
-        params=params,
+    data = run_persisted_query(
+        operation_name='Items',
+        variables={
+            'ids': item_ids,
+            'shopId': str(shop_id),
+            'zoneId': DEFAULT_ZONE_ID,
+            'postalCode': zip_code,
+        },
+        query_hash=ITEMS_HASH,
         cookies=cookies,
-        headers={"Referer": referer},
+        referer=referer,
     )
-
-    if page.status != 200:
+    if not data:
         return []
 
-    data = page.json()
-    if data.get('errors'):
-        return []
-
-    return data.get('data', {}).get('items', [])
+    return data.get('items', [])
 
 
-def parse_price(price_display):
-    if not price_display:
-        return None
-
-    match = re.search(r"\$([0-9]+(?:\.[0-9]+)?)", price_display)
-    if not match:
-        return None
-
-    return float(match.group(1))
-
-
-def normalize_item(item, location_id):
-    _get = item.get
-
-    price_view = (_get('price') or {}).get('viewSection', {})
-    item_card = price_view.get('itemCard', {})
-    item_details = price_view.get('itemDetails', {})
-    availability = _get('availability') or {}
-    availability_view = availability.get('viewSection', {})
-    rating_data = _get('productRating') or {}
-    view_section = _get('viewSection') or {}
-    image = (view_section.get('itemImage') or {}).get('url')
-
-    price_display = item_card.get('priceString') or item_details.get('priceString')
-    unit_price = item_details.get('pricePerUnitString') or item_card.get('pricePerUnitString')
-    was_price = item_card.get('fullPriceString') or item_details.get('fullPriceString')
-    evergreen_url = _get('evergreenUrl')
-
-    return normalize_product({
-        'retailer': 'aldi',
-        'location_id': str(location_id) if location_id else None,
-        'product_id': _get('legacyId') or _get('productId'),
-        'name': _get('name'),
-        'brand': _get('brandName'),
-        'size': _get('size'),
-        'price': parse_price(price_display),
-        'price_display': price_display,
-        'unit_price': unit_price,
-        'promo_price': None,
-        'was_price': was_price,
-        'rating': rating_data.get('averageStarRating') or rating_data.get('averageRating'),
-        'reviews': rating_data.get('ratingCount') or rating_data.get('numberOfRatings'),
-        'image_url': image,
-        'in_stock': availability.get('available'),
-        'stock_level': availability.get('stockLevel'),
-        'availability': availability_view.get('stockLevelLabelString'),
-        'url': f"{BASE_URL}/store/aldi/products/{evergreen_url}" if evergreen_url else None,
-    })
-
-
-def search(query, location_id=None, zip_code=None, max_results=5):
-    if max_results <= 0:
-        return []
-
+# establishes session, fetches credentials, and builds the complete search context needed for product queries
+def build_search_context(query, location_id=None, zip_code=None):
     search_page = fetcher.fetch(SEARCH_URL, params={'k': query})
     cookies = search_page.cookies
     referer = str(search_page.url)
 
-    if not zip_code:
-        zip_code = get_default_zip(cookies, referer)
+    resolved_zip = zip_code or get_default_zip(cookies, referer)
+    if not resolved_zip:
+        return None
 
-    if not zip_code:
-        return []
-
-    latitude, longitude = get_coordinates(zip_code)
+    latitude, longitude = get_coordinates(resolved_zip)
     if latitude is None or longitude is None:
-        return []
+        return None
 
-    token = get_retailer_inventory_session_token(
-        zip_code,
+    token, shop_id = get_retailer_inventory_session_token(
+        resolved_zip,
         latitude,
         longitude,
         cookies,
         referer,
     )
     if not token:
+        return None
+
+    resolved_location_id = str(location_id) if location_id else shop_id
+    if not resolved_location_id:
+        return None
+
+    return {
+        'cookies': cookies,
+        'referer': referer,
+        'zip_code': resolved_zip,
+        'location_id': resolved_location_id,
+        'token': token,
+    }
+
+
+# processes a single item and adds it to results if valid
+def _process_item(item, location_id, results, max_results):
+    if not item.get('name'):
+        return False
+    results.append(normalize_item(item, location_id))
+    return len(results) >= max_results
+
+
+# processes batches of item ids and collects normalized products
+def _process_items_batch(item_ids, search_context, max_results):
+    results = []
+    batch_size = max(max_results * 2, 8)
+    for offset in range(0, len(item_ids), batch_size):
+        batch_ids = item_ids[offset: offset + batch_size]
+        items = fetch_items(
+            batch_ids,
+            search_context['location_id'],
+            search_context['zip_code'],
+            search_context['cookies'],
+            search_context['referer'],
+        )
+        if not items:
+            continue
+
+        for item in items:
+            if _process_item(item, search_context['location_id'], results, max_results):
+                return results
+
+    return results
+
+
+# orchestrates the complete search flow from context setup through product normalization and filtering
+def search(query, location_id=None, zip_code=None, max_results=5):
+    if max_results <= 0:
         return []
 
-    resolved_location_id = location_id
-    if not resolved_location_id:
-        resolved_location_id = get_default_shop_id(zip_code, cookies, referer)
+    # resolve zip_code early to use as cache key component
+    initial_page = fetcher.fetch(SEARCH_URL, params={'k': query})
+    initial_cookies = initial_page.cookies
+    initial_referer = str(initial_page.url)
+    
+    resolved_zip = zip_code or get_default_zip(initial_cookies, initial_referer)
+    if not resolved_zip:
+        return []
+    
+    # attempt to retrieve from cache (Cache-Aside: Read)
+    # cache key includes zip_code to ensure location-specific isolation
+    if location_id and (cached_results := product_cache.get('aldi', f"{location_id}:{resolved_zip}", query)):
+        return cached_results[:max_results]
 
-    if not resolved_location_id:
+    search_context = build_search_context(query, location_id=location_id, zip_code=zip_code)
+    if not search_context:
         return []
 
     placements = fetch_search_placements(
         query,
-        zip_code,
-        resolved_location_id,
-        token,
-        cookies,
-        referer,
+        search_context['zip_code'],
+        search_context['location_id'],
+        search_context['token'],
+        search_context['cookies'],
+        search_context['referer'],
         max_results=max_results,
     )
     if not placements:
@@ -332,47 +297,18 @@ def search(query, location_id=None, zip_code=None, max_results=5):
     if not item_ids:
         return []
 
-    results = []
-    batch_size = max(max_results * 2, 8)
-    for offset in range(0, len(item_ids), batch_size):
-        batch_ids = item_ids[offset: offset + batch_size]
-        items = fetch_items(batch_ids, resolved_location_id, zip_code, cookies, referer)
-        if not items:
-            continue
-
-        for item in items:
-            if not item.get('name'):
-                continue
-
-            results.append(normalize_item(item, resolved_location_id))
-            if len(results) >= max_results:
-                return results
-
+    results = _process_items_batch(item_ids, search_context, max_results)
+    
+    # store in cache for 12 hours (Cache-Aside: Write)
+    if search_context['location_id'] and search_context['zip_code'] and results:
+        product_cache.set('aldi', f"{search_context['location_id']}:{search_context['zip_code']}", query, results)
+    
     return results
 
 
+# formats and prints search results in a human-readable table layout
 def display_results(results, query):
-    print(f"\n{'='*60}")
-    print(f"Found {len(results)} products for '{query}'")
-    print(f"{'='*60}\n")
-
-    for i, product in enumerate(results, start=1):
-        print(f"{i}. {product['name']}")
-        if product['brand']:
-            print(f"   Brand: {product['brand']}")
-        if product['size']:
-            print(f"   Size: {product['size']}")
-        print(f"   Price: {product['price_display'] or product['price'] or 'N/A'}")
-        if product['was_price']:
-            print(f"   Was: {product['was_price']}")
-        if product['unit_price']:
-            print(f"   Unit: {product['unit_price']}")
-        if product['rating']:
-            print(f"   Rating: {product['rating']}/5 ({product['reviews']} reviews)")
-        print(f"   In Stock: {product['in_stock']} ({product['stock_level']})")
-        if product['url']:
-            print(f"   URL: {product['url']}")
-        print()
+    display.display_products(results, query, "Aldi")
 
 
 if __name__ == "__main__":

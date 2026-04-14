@@ -1,19 +1,27 @@
 import re
-import json
+import orjson
+import logging
 import urllib.parse
 
 from scrapling import StealthyFetcher
 
 from app.models import normalize_product
-from app.kroger.constants import SEARCH_URL, BASE_URL
+from app.utils import display
+from app.utils.product_cache import product_cache
+from app.kroger.constants import SEARCH_URL, BASE_URL, REFERER
+from app.kroger.browser_pool import get_browser_pool
+
+logger = logging.getLogger(__name__)
+
+_USE_BROWSER_POOL = False
 
 
 class KrogerDataNotFoundError(Exception):
     pass
 
 
+# converts cookie dict to playwright format list of {name, value, url} objects
 def _dict_cookies_to_playwright(cookies_dict):
-    """Convert a plain {name: value} cookie dict to Playwright list format."""
     if not cookies_dict:
         return None
     return [
@@ -22,6 +30,7 @@ def _dict_cookies_to_playwright(cookies_dict):
     ]
 
 
+# extracts the initial state json object from page scripts
 def extract_initial_state(page):
     scripts = page.css('script')
     for script in scripts:
@@ -31,10 +40,11 @@ def extract_initial_state(page):
             if match:
                 json_str = match.group(1)
                 json_str = json_str.encode('utf-8').decode('unicode_escape')
-                return json.loads(json_str)
+                return orjson.loads(json_str)
     raise KrogerDataNotFoundError(f"Status: {page.status} | URL: {page.url}")
 
 
+# retrieves the front image url from product images list by size
 def get_front_image(images, size='large'):
     for img in images or []:
         if img.get('perspective') == 'front' and img.get('size') == size:
@@ -42,8 +52,8 @@ def get_front_image(images, size='large'):
     return None
 
 
+# extracts numeric price value from formatted price strings or numeric types
 def extract_numeric_price(price_value):
-    """Extract numeric price from strings like 'USD 2.79'."""
     if price_value is None:
         return None
     if isinstance(price_value, (int, float)):
@@ -55,14 +65,24 @@ def extract_numeric_price(price_value):
     return None
 
 
+# fetches and normalizes kroger product search results using browser automation
 def search(query, cookies=None, location_id=None, max_results=5):
+    # attempt to retrieve from cache (Cache-Aside: Read)
+    if location_id and (cached_results := product_cache.get('kroger', str(location_id), query)):
+        return cached_results[:max_results]
+
     params = {'query': query, 'searchType': 'default_search'}
     url = f"{SEARCH_URL}?{urllib.parse.urlencode(params)}"
 
     playwright_cookies = _dict_cookies_to_playwright(cookies) if isinstance(cookies, dict) else cookies
 
-    sf = StealthyFetcher()
-    page = sf.fetch(url, cookies=playwright_cookies, headless=True)
+    if _USE_BROWSER_POOL:
+        pool = get_browser_pool()
+        page = pool.fetch(url, cookies=playwright_cookies, google_search=False, extra_headers={'referer': REFERER})
+        logger.debug(f"Kroger search using browser pool (request #{pool.request_count})")
+    else:
+        sf = StealthyFetcher()
+        page = sf.fetch(url, cookies=playwright_cookies, headless=True, solve_cloudflare=False, google_search=False, extra_headers={'referer': REFERER})
 
     state = extract_initial_state(page)
 
@@ -103,27 +123,16 @@ def search(query, cookies=None, location_id=None, max_results=5):
             'url': f"{BASE_URL}/p/{item.get('seoDescription')}/{product.get('id')}",
         }))
 
+    # store in cache for 12 hours (Cache-Aside: Write)
+    if location_id and results:
+        product_cache.set('kroger', str(location_id), query, results)
+
     return results
 
 
+# formats and prints search results in a human-readable table layout
 def display_results(results, query):
-    print(f"\n{'='*60}")
-    print(f"Found {len(results)} products for '{query}'")
-    print(f"{'='*60}\n")
-
-    for i, product in enumerate(results, start=1):
-        print(f"{i}. {product['name']}")
-        if product['brand']:
-            print(f"   Brand: {product['brand']}")
-        print(f"   Price: {product['price_display'] or product['price'] or 'N/A'}")
-        if product['promo_price']:
-            print(f"   Sale: {product['promo_price']}")
-        if product['unit_price']:
-            print(f"   Unit: {product['unit_price']}")
-        if product['rating']:
-            print(f"   Rating: {product['rating']}/5 ({product['reviews']} reviews)")
-        print(f"   In Stock: {product['in_stock']} ({product['stock_level']})")
-        print(f"   URL: {product['url']}\n")
+    display.display_products(results, query, "Kroger")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-import json
+import orjson
 import time
 
 
@@ -7,10 +7,10 @@ def build_location_cookies(store_id):
 
     return {
         "DD_modStore": store_id,
-        "x-active-modality": json.dumps({
+        "x-active-modality": orjson.dumps({
             "type": "IN_STORE",
             "locationId": store_id,
             "source": "MODALITY_OPTIONS",
             "createdDate": timestamp_ms
-        }, separators=(',', ':'))
+        }).decode()
     }

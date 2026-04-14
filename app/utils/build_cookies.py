@@ -1,5 +1,5 @@
 import uuid
-import json
+import orjson
 import base64
 import time
 from urllib.parse import quote
@@ -26,7 +26,7 @@ def build_location_cookies(store_id, zip_code):
     }
 
     # serialize → base64 → URL-encode (Walmart's cookie format)
-    json_str = json.dumps(payload, separators=(",", ":"))
+    json_str = orjson.dumps(payload).decode()
     b64 = base64.b64encode(json_str.encode("utf-8")).decode("utf-8")
     encoded = quote(b64, safe="")
 

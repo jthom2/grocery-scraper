@@ -1,5 +1,6 @@
 from app.models import normalize_location
-from app.utils import fetcher, store_selection
+from app.utils import fetcher, store_selection, display
+from app.utils.store_cache import store_cache
 from app.kroger.constants import REFERER, STORE_LOCATOR_URL
 
 
@@ -7,7 +8,12 @@ class StoreNotFoundError(Exception):
     pass
 
 
+# fetches and normalizes kroger store locations from the store locator api
 def get_stores(zip_code, max_results=10):
+    # attempt to retrieve from cache (Cache-Aside: Read)
+    if cached_stores := store_cache.get('kroger', zip_code):
+        return cached_stores[:max_results]
+
     headers = {"Referer": f"{REFERER}stores/search"}
     params = {'filter.query': zip_code, 'projections': 'compact'}
 
@@ -56,25 +62,19 @@ def get_stores(zip_code, max_results=10):
             },
         }))
 
+    # store in cache for 24 hours (Cache-Aside: Write)
+    if results:
+        store_cache.set('kroger', zip_code, results)
+
     return results
 
 
+# formats and prints store locations in a human-readable table layout
 def display_stores(stores, zip_code):
-    print(f"\n{'='*60}")
-    print(f"Found {len(stores)} Kroger stores near '{zip_code}'")
-    print(f"{'='*60}\n")
-
-    for i, store in enumerate(stores, start=1):
-        status = "OPEN" if store['is_open'] else "CLOSED"
-        print(f"{i}. {store['name']}")
-        print(f"   {store['address']}")
-        city_state_zip = store.get('metadata', {}).get('city_state_zip', '')
-        print(f"   {city_state_zip}")
-        print(f"   Phone: {store['phone']}")
-        print(f"   Distance: {store['distance']} | {status} - {store['open_text']}")
-        print(f"   Location ID: {store['location_id']}\n")
+    display.display_stores(stores, zip_code, "Kroger")
 
 
+# prompts for zip code, fetches stores, and returns selected store location and zip code
 def find_and_select_store():
     zip_code = input("ZIP: ")
     stores = get_stores(zip_code)
