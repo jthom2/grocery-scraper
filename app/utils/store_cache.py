@@ -57,7 +57,7 @@ class StoreCache:
         return None
 
     # stores normalized location data with a time-to-live (TTL)
-    def set(self, retailer: str, zip_code: str, stores: list[dict[str, Any]], ttl_hours: int = 24):
+    def set(self, retailer: str, zip_code: str, stores: list[dict[str, Any]], ttl_hours: int = 168):
         if not (client := self.client):
             return
 
