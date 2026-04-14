@@ -7,6 +7,7 @@ from scrapling.fetchers import Fetcher
 
 from app.models import normalize_product
 from app.utils import display
+from app.utils.product_cache import product_cache
 from app.publix.constants import BASE_URL, SEARCH_URL
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,10 @@ def _has_product_content(html):
 
 # searches publix products with fast fetcher fallback to browser automation for complex scenarios
 def search(query, location_id=None, max_results=15):
+
+    # attempt to retrieve from cache (Cache-Aside: Read)
+    if location_id and (cached_results := product_cache.get('publix', str(location_id), query)):
+        return cached_results[:max_results]
 
     url = f"{SEARCH_URL}?searchTerm={urllib.parse.quote(query)}&facet=promoType%3A%3Atrue"
 
@@ -38,7 +43,11 @@ def search(query, location_id=None, max_results=15):
 
             if store_context_ok and _has_product_content(html):
                 logger.debug("Publix search succeeded with standard Fetcher (fast path)")
-                return extract_products(page, html, max_results, location_id)
+                results = extract_products(page, html, max_results, location_id)
+                # store in cache for 12 hours (Cache-Aside: Write)
+                if location_id and results:
+                    product_cache.set('publix', str(location_id), query, results)
+                return results
 
             logger.debug("Fetcher returned 200 but content validation failed, falling back to StealthyFetcher")
 
@@ -72,7 +81,11 @@ def search(query, location_id=None, max_results=15):
     if location_id and f'"current_store": "{location_id}"' not in html:
         print("WARNING: Store context may not have persisted through redirects.")
 
-    return extract_products(page, html, max_results, location_id)
+    results = extract_products(page, html, max_results, location_id)
+    # store in cache for 12 hours (Cache-Aside: Write)
+    if location_id and results:
+        product_cache.set('publix', str(location_id), query, results)
+    return results
 
 
 # extracts and normalizes product data from search result html using regex pattern matching

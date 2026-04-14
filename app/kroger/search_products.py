@@ -7,6 +7,7 @@ from scrapling import StealthyFetcher
 
 from app.models import normalize_product
 from app.utils import display
+from app.utils.product_cache import product_cache
 from app.kroger.constants import SEARCH_URL, BASE_URL, REFERER
 from app.kroger.browser_pool import get_browser_pool
 
@@ -66,6 +67,10 @@ def extract_numeric_price(price_value):
 
 # fetches and normalizes kroger product search results using browser automation
 def search(query, cookies=None, location_id=None, max_results=5):
+    # attempt to retrieve from cache (Cache-Aside: Read)
+    if location_id and (cached_results := product_cache.get('kroger', str(location_id), query)):
+        return cached_results[:max_results]
+
     params = {'query': query, 'searchType': 'default_search'}
     url = f"{SEARCH_URL}?{urllib.parse.urlencode(params)}"
 
@@ -117,6 +122,10 @@ def search(query, cookies=None, location_id=None, max_results=5):
             'availability': stock_level,
             'url': f"{BASE_URL}/p/{item.get('seoDescription')}/{product.get('id')}",
         }))
+
+    # store in cache for 12 hours (Cache-Aside: Write)
+    if location_id and results:
+        product_cache.set('kroger', str(location_id), query, results)
 
     return results
 

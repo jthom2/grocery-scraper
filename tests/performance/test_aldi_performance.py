@@ -14,6 +14,64 @@ from tests.performance.assertions import (
 pytestmark = pytest.mark.perf
 
 
+def _create_mock_aldi_responses():
+    responses = {
+        "search_page": MagicMock(
+            status=200,
+            cookies={"session": "abc123"},
+            url="https://www.aldi.com/en/groceries/search",
+        ),
+        "zip_coordinates": MagicMock(
+            status=200,
+            json=lambda: {
+                "places": [{
+                    "latitude": "40.7128",
+                    "longitude": "-74.0060",
+                }]
+            },
+        ),
+        "session_token": {
+            "data": {
+                "shopCollection": {
+                    "shops": [{
+                        "id": "12345",
+                        "retailerInventorySessionToken": "token_xyz789",
+                    }]
+                }
+            }
+        },
+        "search_placements": {
+            "data": {
+                "searchResultsPlacements": {
+                    "placements": [
+                        {"item": {"id": "items_100-1"}},
+                        {"item": {"id": "items_100-2"}},
+                    ]
+                }
+            }
+        },
+        "items": {
+            "data": {
+                "items": [
+                    {
+                        "name": "Product 1",
+                        "legacyId": "item1",
+                        "price": {"viewSection": {"itemCard": {"priceString": "$5.99"}}},
+                        "availability": {"available": True},
+                    },
+                    {
+                        "name": "Product 2",
+                        "legacyId": "item2",
+                        "price": {"viewSection": {"itemCard": {"priceString": "$3.99"}}},
+                        "availability": {"available": True},
+                    },
+                ]
+            }
+        },
+    }
+    return responses
+
+
 # simulates session caching for testing warm path
 class AldiSearchContextCache:
     def __init__(self):
@@ -45,63 +103,6 @@ class AldiSearchContextCache:
 
 # token caching is critical for avoiding repeated auth requests
 class TestAldiSessionTokenCaching:
-    def _create_mock_aldi_responses(self):
-        responses = {
-            "search_page": MagicMock(
-                status=200,
-                cookies={"session": "abc123"},
-                url="https://www.aldi.com/en/groceries/search",
-            ),
-            "zip_coordinates": MagicMock(
-                status=200,
-                json=lambda: {
-                    "places": [{
-                        "latitude": "40.7128",
-                        "longitude": "-74.0060",
-                    }]
-                },
-            ),
-            "session_token": {
-                "data": {
-                    "shopCollection": {
-                        "shops": [{
-                            "id": "12345",
-                            "retailerInventorySessionToken": "token_xyz789",
-                        }]
-                    }
-                }
-            },
-            "search_placements": {
-                "data": {
-                    "searchResultsPlacements": {
-                        "placements": [
-                            {"item": {"id": "items_100-1"}},
-                            {"item": {"id": "items_100-2"}},
-                        ]
-                    }
-                }
-            },
-            "items": {
-                "data": {
-                    "items": [
-                        {
-                            "name": "Product 1",
-                            "legacyId": "item1",
-                            "price": {"viewSection": {"itemCard": {"priceString": "$5.99"}}},
-                            "availability": {"available": True},
-                        },
-                        {
-                            "name": "Product 2",
-                            "legacyId": "item2",
-                            "price": {"viewSection": {"itemCard": {"priceString": "$3.99"}}},
-                            "availability": {"available": True},
-                        },
-                    ]
-                }
-            },
-        }
-        return responses
-
     # 7 requests * ~500ms = ~4000ms cold start baseline
     @pytest.mark.perf_baseline
     def test_aldi_cold_start_baseline(
@@ -109,30 +110,46 @@ class TestAldiSessionTokenCaching:
         mock_fetcher,
         performance_timer,
         perf_baseline,
+        mocker,
     ):
-        responses = self._create_mock_aldi_responses()
+        # Mock product_cache to avoid Redis timeouts
+        mocker.patch("app.aldi.search_products.product_cache")
+        
+        responses = _create_mock_aldi_responses()
 
         def mock_fetch_side_effect(url, *args, **kwargs):
-            if "search" in url:
-                resp = responses["search_page"]
-            elif "api.zippopotam" in url:
-                resp = responses["zip_coordinates"]
-            else:
+            url_str = str(url)
+            if "search" in url_str:
+                return responses["search_page"]
+            elif "api.zippopotam" in url_str:
+                return responses["zip_coordinates"]
+            elif "graphql" in url_str:
+                params = kwargs.get("params", {})
+                op_name = params.get("operationName")
                 resp = MagicMock()
                 resp.status = 200
-                resp.json = lambda: {"data": {}}
+                if op_name == "ShopCollectionScoped":
+                    resp.json = lambda: responses["session_token"]
+                elif op_name == "SearchResultsPlacements":
+                    resp.json = lambda: responses["search_placements"]
+                elif op_name == "Items":
+                    resp.json = lambda: responses["items"]
+                else:
+                    resp.json = lambda: {"data": {}}
+                return resp
+            
+            resp = MagicMock()
+            resp.status = 200
+            resp.json = lambda: {"data": {}}
             return resp
 
         mock_fetcher.side_effect = mock_fetch_side_effect
 
         with performance_timer() as timer:
-            try:
-                results = search("cheese", zip_code="10001", max_results=2)
-            except Exception:
-                # May fail due to incomplete mocking, but we measure latency anyway
-                pass
+            results = search("cheese", zip_code="10001", max_results=2)
 
-        # Cold start should be ~4000ms (7 requests * ~500-600ms per request)
+        # Ensure we got results to confirm search actually ran
+        assert len(results) > 0
         assert timer.get_ms() < 4500
 
         from tests.performance.conftest import PerformanceMetrics
@@ -150,7 +167,9 @@ class TestAldiSessionTokenCaching:
         mock_http_with_delay,
         monkeypatch,
         performance_timer,
+        mocker,
     ):
+        mocker.patch("app.aldi.search_products.product_cache")
         delays = [200, 150, 100, 200, 100, 150, 100]  # ~1000ms total
         call_count = [0]
 
@@ -183,7 +202,9 @@ class TestAldiSessionTokenCaching:
         mock_fetcher,
         monkeypatch,
         performance_timer,
+        mocker,
     ):
+        mocker.patch("app.aldi.search_products.product_cache")
         def mock_fetch_tracking(url, *args, **kwargs):
             mock_request_tracker.add_request(url, 100)  # 100ms per request
             resp = MagicMock()
@@ -303,18 +324,40 @@ class TestAldiMultiRequestOptimization:
 class TestAldiSearchRegressions:
     def test_aldi_no_regression_cold_start(
         self,
-        mock_http_with_delay,
+        mock_fetcher,
         performance_timer,
         perf_baseline,
+        mocker,
     ):
+        mocker.patch("app.aldi.search_products.product_cache")
         baseline = perf_baseline.get_baseline("aldi_cold_start_latency")
         if baseline is None:
             pytest.skip("Baseline not established yet")
 
+        # Reuse mock logic from baseline test
+        responses = _create_mock_aldi_responses()
+        def mock_fetch_side_effect(url, *args, **kwargs):
+            url_str = str(url)
+            if "graphql" in url_str:
+                params = kwargs.get("params", {})
+                op_name = params.get("operationName")
+                resp = MagicMock(status=200)
+                if op_name == "ShopCollectionScoped":
+                    resp.json = lambda: responses["session_token"]
+                elif op_name == "SearchResultsPlacements":
+                    resp.json = lambda: responses["search_placements"]
+                elif op_name == "Items":
+                    resp.json = lambda: responses["items"]
+                return resp
+            resp = MagicMock(status=200, cookies={"session": "abc"}, url=url_str)
+            if "api.zippopotam" in url_str:
+                resp.json = lambda: {"places": [{"latitude": "40.7", "longitude": "-74.0"}]}
+            return resp
+
+        mock_fetcher.side_effect = mock_fetch_side_effect
+
         with performance_timer() as timer:
-            # Simulate with delays
-            import time
-            time.sleep(0.1)  # 100ms simulation
+            search("cheese", zip_code="10001", max_results=2)
 
         assert_no_regression(
             actual_ms=timer.get_ms(),

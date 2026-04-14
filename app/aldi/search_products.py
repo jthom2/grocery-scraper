@@ -6,6 +6,7 @@ from functools import lru_cache
 
 from app.utils import fetcher, display
 from app.utils.cache import TTLCache
+from app.utils.product_cache import product_cache
 from app.aldi.parser import normalize_item, parse_price
 from app.aldi.constants import (
     BASE_URL,
@@ -262,6 +263,20 @@ def search(query, location_id=None, zip_code=None, max_results=5):
     if max_results <= 0:
         return []
 
+    # resolve zip_code early to use as cache key component
+    initial_page = fetcher.fetch(SEARCH_URL, params={'k': query})
+    initial_cookies = initial_page.cookies
+    initial_referer = str(initial_page.url)
+    
+    resolved_zip = zip_code or get_default_zip(initial_cookies, initial_referer)
+    if not resolved_zip:
+        return []
+    
+    # attempt to retrieve from cache (Cache-Aside: Read)
+    # cache key includes zip_code to ensure location-specific isolation
+    if location_id and (cached_results := product_cache.get('aldi', f"{location_id}:{resolved_zip}", query)):
+        return cached_results[:max_results]
+
     search_context = build_search_context(query, location_id=location_id, zip_code=zip_code)
     if not search_context:
         return []
@@ -282,7 +297,13 @@ def search(query, location_id=None, zip_code=None, max_results=5):
     if not item_ids:
         return []
 
-    return _process_items_batch(item_ids, search_context, max_results)
+    results = _process_items_batch(item_ids, search_context, max_results)
+    
+    # store in cache for 12 hours (Cache-Aside: Write)
+    if search_context['location_id'] and search_context['zip_code'] and results:
+        product_cache.set('aldi', f"{search_context['location_id']}:{search_context['zip_code']}", query, results)
+    
+    return results
 
 
 # formats and prints search results in a human-readable table layout
