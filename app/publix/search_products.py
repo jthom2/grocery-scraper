@@ -4,6 +4,7 @@ import logging
 
 from scrapling import StealthyFetcher
 from scrapling.fetchers import Fetcher
+from lxml import html as lxml_html
 
 from app.models import normalize_product
 from app.utils import display
@@ -88,33 +89,54 @@ def search(query, location_id=None, max_results=15):
     return results
 
 
-# extracts and normalizes product data from search result html using regex pattern matching
+# extracts and normalizes product data from search result html using lxml dom traversal
+# this approach is more resilient to HTML schema changes than regex pattern matching
 def extract_products(page, html, max_results, location_id=None):
-    
     products = []
-
-
     seen_ids = set()
-    for match in re.finditer(r'href="/pd/([^/]+)/(RIO-PCI-\d+)[^"]*"[^>]*aria-label="([^"]+)"', html):
+    
+    try:
+        tree = lxml_html.fromstring(html)
+    except (lxml_html.etree.ParserError, ValueError):
+        logger.warning("Failed to parse Publix search result HTML")
+        return products
+    
+    # find all product links using CSS selectors
+    # target structure: <a href="/pd/{name_slug}/{product_id}" ... aria-label="{price} - {name}">
+    product_links = tree.xpath('//a[contains(@href, "/pd/") and starts-with(@href, "/pd/") and contains(@aria-label, "$")]')
+    
+    for link in product_links:
         if len(products) >= max_results:
             break
-
-        name_slug = match.group(1)
-        product_id = match.group(2)
-        aria_label = match.group(3)
-
+        
+        href = link.get('href', '')
+        aria_label = link.get('aria-label', '')
+        
+        # extract product_id and name_slug from href using regex (resilient to href structure changes)
+        href_match = re.search(r'/pd/([^/]+)/(RIO-PCI-\d+)', href)
+        if not href_match:
+            continue
+        
+        name_slug = href_match.group(1)
+        product_id = href_match.group(2)
+        
         if product_id in seen_ids:
             continue
-
-        price_match = re.match(r'(\$[\d.]+(?:\s+or\s+\d+\s+for\s+\$[\d.]+)?|\d+\s+for\s+\$[\d.]+(?:\s*/\s*[a-zA-Z\d\.]+)?|\$[\d.]+(?:\s*/\s*[a-zA-Z\d\.]+)?)\s*-\s*(.+)', aria_label)
-
+        
+        # parse aria-label to extract price and product name
+        price_match = re.match(
+            r'(\$[\d.]+(?:\s+or\s+\d+\s+for\s+\$[\d.]+)?|\d+\s+for\s+\$[\d.]+(?:\s*/\s*[a-zA-Z\d\.]+)?|\$[\d.]+(?:\s*/\s*[a-zA-Z\d\.]+)?)\s*-\s*(.+)',
+            aria_label
+        )
+        
         if not price_match:
             continue
-
+        
         seen_ids.add(product_id)
         price = price_match.group(1)
         name = price_match.group(2).strip()
         brand = name.split()[0] if name else None
+        
         numeric_match = re.search(r'\$([0-9]+(?:\.[0-9]+)?)', price)
         parsed_price = None
         if numeric_match:
@@ -123,7 +145,7 @@ def extract_products(page, html, max_results, location_id=None):
             except ValueError:
                 logger.warning("Failed to parse numeric Publix price from '%s'", price)
                 parsed_price = None
-
+        
         products.append(normalize_product({
             'retailer': 'publix',
             'product_id': product_id,
@@ -140,7 +162,7 @@ def extract_products(page, html, max_results, location_id=None):
             'url': f"{BASE_URL}/pd/{name_slug}/{product_id}",
             'metadata': {'raw_price_text': price},
         }))
-
+    
     return products
 
 

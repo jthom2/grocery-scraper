@@ -98,10 +98,11 @@ def mock_stealthy_fetcher(mocker):
 # clears lru_cache to prevent cross-test pollution
 @pytest.fixture
 def mock_requests_get(mocker):
-    from app.utils.zip2loc import get_city_state
+    from app.utils.zip2loc import _ZIP_CACHE, _fetch_from_api
     from app.aldi.search_products import get_coordinates
 
-    get_city_state.cache_clear()
+    _ZIP_CACHE.clear()  # clear TTL cache
+    _fetch_from_api.cache_clear()  # clear lru_cache on the fetch function
     get_coordinates.cache_clear()
 
     return mocker.patch("requests.get")
