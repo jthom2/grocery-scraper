@@ -4,6 +4,7 @@ import requests
 from app.models import normalize_location
 from app.utils import fetcher, store_selection, display
 from app.utils.cache import TTLCache
+from app.utils.store_cache import store_cache
 from app.aldi.constants import SEARCH_URL, STORE_FRONT_URL, IDP_SHOPS_URL
 
 _SESSION_CACHE = TTLCache(ttl_seconds=15 * 60)
@@ -59,6 +60,10 @@ def _fetch_shops_direct(zip_code, force_refresh=False):
 
 
 def get_stores(zip_code, max_results=10):
+    # attempt to retrieve from cache (Cache-Aside: Read)
+    if cached_stores := store_cache.get('aldi', zip_code):
+        return cached_stores[:max_results]
+
     shops_data = _fetch_shops_direct(zip_code)
     
     # fallback to fetcher if direct requests failed
@@ -103,6 +108,11 @@ def get_stores(zip_code, max_results=10):
                 'city_state_zip': f"{city}, {state} {postal}".strip(", "),
             },
         }))
+    
+    # store in cache for 24 hours (Cache-Aside: Write)
+    if stores:
+        store_cache.set('aldi', zip_code, stores)
+
     return stores
 
 
@@ -135,5 +145,3 @@ if __name__ == "__main__":
             print(f"\nSelected: {sel['name']}\nLocation ID: {sel['location_id']}")
     else:
         print("No stores found.")
-
-

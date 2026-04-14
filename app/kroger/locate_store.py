@@ -1,5 +1,6 @@
 from app.models import normalize_location
 from app.utils import fetcher, store_selection, display
+from app.utils.store_cache import store_cache
 from app.kroger.constants import REFERER, STORE_LOCATOR_URL
 
 
@@ -9,6 +10,10 @@ class StoreNotFoundError(Exception):
 
 # fetches and normalizes kroger store locations from the store locator api
 def get_stores(zip_code, max_results=10):
+    # attempt to retrieve from cache (Cache-Aside: Read)
+    if cached_stores := store_cache.get('kroger', zip_code):
+        return cached_stores[:max_results]
+
     headers = {"Referer": f"{REFERER}stores/search"}
     params = {'filter.query': zip_code, 'projections': 'compact'}
 
@@ -56,6 +61,10 @@ def get_stores(zip_code, max_results=10):
                 'city_state_zip': city_state_zip,
             },
         }))
+
+    # store in cache for 24 hours (Cache-Aside: Write)
+    if results:
+        store_cache.set('kroger', zip_code, results)
 
     return results
 

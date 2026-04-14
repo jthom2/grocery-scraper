@@ -1,6 +1,7 @@
 from app.publix.constants import REFERER, STORE_DIRECTORY_URL
 from app.models import normalize_location
 from app.utils import fetcher, store_selection, display
+from app.utils.store_cache import store_cache
 
 
 # formats and prints store locations in a human-readable table layout
@@ -10,6 +11,10 @@ def display_stores(stores, zip_code):
 
 # fetches and normalizes publix store locations from the store directory api
 def fetch_stores(zip_code, max_results=4):
+    # attempt to retrieve from cache (Cache-Aside: Read)
+    if cached_stores := store_cache.get('publix', zip_code):
+        return cached_stores[:max_results]
+
     request_count = max(1, int(max_results))
     params = {
         'types': 'R,G,H,N,S',
@@ -42,6 +47,10 @@ def fetch_stores(zip_code, max_results=4):
                 'short_name': _get('shortName'),
             },
         }))
+
+    # store in cache for 24 hours (Cache-Aside: Write)
+    if results:
+        store_cache.set('publix', zip_code, results)
 
     return results
 
