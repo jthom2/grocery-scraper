@@ -13,7 +13,7 @@ from app.kroger.browser_pool import get_browser_pool
 
 logger = logging.getLogger(__name__)
 
-_USE_BROWSER_POOL = True
+_USE_BROWSER_POOL = False
 
 
 class KrogerDataNotFoundError(Exception):
@@ -82,7 +82,7 @@ def search(query, cookies=None, location_id=None, max_results=5):
         logger.debug(f"Kroger search using browser pool (request #{pool.request_count})")
     else:
         sf = StealthyFetcher()
-        page = sf.fetch(url, cookies=playwright_cookies, headless=True, google_search=False, extra_headers={'referer': REFERER})
+        page = sf.fetch(url, cookies=playwright_cookies, headless=True, solve_cloudflare=False, google_search=False, extra_headers={'referer': REFERER})
 
     state = extract_initial_state(page)
 
