@@ -29,6 +29,9 @@ ITEM_ID_PATTERN = re.compile(r'"(items_[0-9]+-[0-9]+)"')
 _SESSION_TOKEN_CACHE = TTLCache(ttl_seconds=15 * 60)
 
 
+from app.errors import ScraperNetworkError, ScraperBlockedError, ScraperParsingError
+
+
 # executes a graphql persisted query and returns the data payload or empty dict on error
 def run_persisted_query(operation_name, variables, query_hash, cookies, referer):
     params = {
@@ -48,12 +51,15 @@ def run_persisted_query(operation_name, variables, query_hash, cookies, referer)
         cookies=cookies,
         headers={"Referer": referer},
     )
-    if page.status != 200:
-        return None
+    if page.status == 403 or page.status == 429:
+        raise ScraperBlockedError(f"Blocked by anti-bot: {page.status}", status_code=page.status, url=page.url)
+    elif page.status != 200:
+        raise ScraperNetworkError(f"Non-200 response: {page.status}", status_code=page.status, url=page.url)
 
     payload = page.json()
     if payload.get('errors'):
-        return None
+        logger.warning(f"GraphQL errors in {operation_name}: {payload['errors']}")
+        return {}
 
     return payload.get('data') or {}
 
@@ -64,7 +70,7 @@ def get_coordinates(zip_code):
     page = fetcher.fetch(f'{ZIP_LOOKUP_URL}/{zip_code}')
 
     if page.status != 200:
-        return None, None
+        raise ScraperNetworkError(f"Failed to fetch coordinates for {zip_code}. Status: {page.status}", status_code=page.status, url=page.url)
 
     places = page.json().get('places', [])
     if not places:
@@ -76,7 +82,7 @@ def get_coordinates(zip_code):
     try:
         return float(lat_raw), float(lon_raw)
     except (TypeError, ValueError):
-        return None, None
+        raise ScraperParsingError(f"Failed to parse coordinates for {zip_code}", status_code=page.status, url=page.url)
 
 
 # retrieves the user's default zip code from aldi's location endpoint
@@ -88,7 +94,7 @@ def get_default_zip(cookies, referer):
     )
 
     if page.status != 200:
-        return None
+        raise ScraperNetworkError(f"Failed to fetch default ZIP. Status: {page.status}", status_code=page.status, url=page.url)
 
     return page.json().get('postal_code')
 

@@ -12,14 +12,20 @@ _REQUEST_TIMEOUT = 8
 _SESSION = requests.Session()
 
 
+from app.errors import ScraperNetworkError, ScraperBlockedError, ScraperParsingError
+
+
 def _prime_session(force_refresh=False):
     cached = _SESSION_CACHE.get('session')
     if cached and not force_refresh:
         return cached
 
     # attempt to get instacart_sid first via requests (faster)
-    warmup = _SESSION.get(SEARCH_URL, timeout=_REQUEST_TIMEOUT, headers={"Referer": SEARCH_URL})
-    instacart_sid = _SESSION.cookies.get('__Host-instacart_sid')
+    try:
+        warmup = _SESSION.get(SEARCH_URL, timeout=_REQUEST_TIMEOUT, headers={"Referer": SEARCH_URL})
+        instacart_sid = _SESSION.cookies.get('__Host-instacart_sid')
+    except requests.RequestException:
+        instacart_sid = None
 
     # also get full cookies/referer via fetcher for fallback path
     entry = fetcher.fetch(SEARCH_URL)
@@ -28,8 +34,13 @@ def _prime_session(force_refresh=False):
         entry = fetcher.fetch(STORE_FRONT_URL)
         referer = STORE_FRONT_URL
 
+    if entry.status == 403 or entry.status == 429:
+        raise ScraperBlockedError(f"Blocked by anti-bot: {entry.status}", status_code=entry.status, url=entry.url)
+    elif entry.status != 200:
+        raise ScraperNetworkError(f"Failed to prime session. Status: {entry.status}", status_code=entry.status, url=entry.url)
+
     session_data = {
-        'cookies': entry.cookies if entry.status == 200 else None,
+        'cookies': entry.cookies,
         'referer': referer,
         'instacart_sid': instacart_sid
     }
@@ -42,21 +53,27 @@ def _fetch_shops_direct(zip_code, force_refresh=False):
     if not session['instacart_sid']:
         return None
 
-    response = _SESSION.get(
-        IDP_SHOPS_URL,
-        params={'postal_code': zip_code},
-        cookies={'__Host-instacart_sid': session['instacart_sid']},
-        headers={"Referer": SEARCH_URL},
-        timeout=_REQUEST_TIMEOUT,
-    )
+    try:
+        response = _SESSION.get(
+            IDP_SHOPS_URL,
+            params={'postal_code': zip_code},
+            cookies={'__Host-instacart_sid': session['instacart_sid']},
+            headers={"Referer": SEARCH_URL},
+            timeout=_REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as e:
+        raise ScraperNetworkError(f"Direct shop fetch failed: {e}", url=IDP_SHOPS_URL)
 
     if response.status_code == 401 and not force_refresh:
         return _fetch_shops_direct(zip_code, force_refresh=True)
 
+    if response.status_code == 403 or response.status_code == 429:
+        raise ScraperBlockedError(f"Blocked by anti-bot: {response.status_code}", status_code=response.status_code, url=IDP_SHOPS_URL)
+
     try:
         return response.json().get('shops', []) if response.status_code == 200 else None
     except (ValueError, AttributeError):
-        return None
+        raise ScraperParsingError(f"Failed to parse direct shop response", status_code=response.status_code, url=IDP_SHOPS_URL)
 
 
 def get_stores(zip_code, max_results=10):

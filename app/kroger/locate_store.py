@@ -4,8 +4,7 @@ from app.utils.store_cache import store_cache
 from app.kroger.constants import REFERER, STORE_LOCATOR_URL
 
 
-class StoreNotFoundError(Exception):
-    pass
+from app.errors import ScraperNetworkError, ScraperBlockedError
 
 
 # fetches and normalizes kroger store locations from the store locator api
@@ -19,8 +18,10 @@ def get_stores(zip_code, max_results=10):
 
     page = fetcher.fetch(STORE_LOCATOR_URL, params=params, headers=headers)
 
-    if page.status != 200:
-        raise StoreNotFoundError(f"Status: {page.status} | URL: {page.url}")
+    if page.status == 403 or page.status == 429:
+        raise ScraperBlockedError(f"Blocked by anti-bot: {page.status}", status_code=page.status, url=page.url)
+    elif page.status != 200:
+        raise ScraperNetworkError(f"Non-200 response: {page.status}", status_code=page.status, url=page.url)
 
     data = page.json()
     stores_data = data.get('data', {}).get('stores', [])

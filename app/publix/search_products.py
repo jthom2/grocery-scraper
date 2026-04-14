@@ -19,6 +19,9 @@ def _has_product_content(html):
     return bool(re.search(r'aria-label="\$[\d.]+', html))
 
 
+from app.errors import ScraperBlockedError, ScraperParsingError, ScraperNetworkError
+
+
 # searches publix products with fast fetcher fallback to browser automation for complex scenarios
 def search(query, location_id=None, max_results=15):
 
@@ -51,6 +54,10 @@ def search(query, location_id=None, max_results=15):
                 return results
 
             logger.debug("Fetcher returned 200 but content validation failed, falling back to StealthyFetcher")
+        elif page.status == 403 or page.status == 429:
+            logger.debug(f"Fetcher blocked ({page.status}), falling back to StealthyFetcher")
+        else:
+            logger.debug(f"Fetcher returned {page.status}, falling back to StealthyFetcher")
 
     except Exception as e:
         logger.debug(f"Fetcher failed: {e}, falling back to StealthyFetcher")
@@ -78,6 +85,11 @@ def search(query, location_id=None, max_results=15):
     fetcher = StealthyFetcher()
     page = fetcher.fetch(redirect_url, cookies=cookies, headless=True)
 
+    if page.status == 403 or page.status == 429:
+        raise ScraperBlockedError(f"Blocked by anti-bot: {page.status}", status_code=page.status, url=page.url)
+    elif page.status != 200:
+        raise ScraperNetworkError(f"Non-200 response: {page.status}", status_code=page.status, url=page.url)
+
     html = str(page.body)
     if location_id and f'"current_store": "{location_id}"' not in html:
         print("WARNING: Store context may not have persisted through redirects.")
@@ -98,8 +110,7 @@ def extract_products(page, html, max_results, location_id=None):
     try:
         tree = lxml_html.fromstring(html)
     except (lxml_html.etree.ParserError, ValueError):
-        logger.warning("Failed to parse Publix search result HTML")
-        return products
+        raise ScraperParsingError(f"Failed to parse Publix search result HTML. Status: {page.status}", status_code=page.status, url=page.url)
     
     # find all product links using CSS selectors
     # target structure: <a href="/pd/{name_slug}/{product_id}" ... aria-label="{price} - {name}">

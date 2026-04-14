@@ -16,22 +16,14 @@ logger = logging.getLogger(__name__)
 _USE_BROWSER_POOL = False
 
 
-class KrogerDataNotFoundError(Exception):
-    pass
-
-
-# converts cookie dict to playwright format list of {name, value, url} objects
-def _dict_cookies_to_playwright(cookies_dict):
-    if not cookies_dict:
-        return None
-    return [
-        {'name': name, 'value': str(value), 'url': f'{BASE_URL}/'}
-        for name, value in cookies_dict.items()
-    ]
+from app.errors import ScraperParsingError, ScraperBlockedError
 
 
 # extracts the initial state json object from page scripts
 def extract_initial_state(page):
+    if page.status == 403 or page.status == 429:
+        raise ScraperBlockedError(f"Blocked by anti-bot: {page.status}", status_code=page.status, url=page.url)
+
     scripts = page.css('script')
     for script in scripts:
         text = script.text or ''
@@ -41,7 +33,7 @@ def extract_initial_state(page):
                 json_str = match.group(1)
                 json_str = json_str.encode('utf-8').decode('unicode_escape')
                 return orjson.loads(json_str)
-    raise KrogerDataNotFoundError(f"Status: {page.status} | URL: {page.url}")
+    raise ScraperParsingError(f"__INITIAL_STATE__ not found. Status: {page.status}", status_code=page.status, url=page.url)
 
 
 # retrieves the front image url from product images list by size

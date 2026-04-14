@@ -64,6 +64,7 @@ class TestPublixFetcherFirstStrategy:
 
         mock_stealthy_instance = MagicMock()
         mock_stealthy_page = MagicMock()
+        mock_stealthy_page.status = 200
         mock_stealthy_page.body = '<html><body></body></html>'
         mock_stealthy_instance.fetch.return_value = mock_stealthy_page
         mock_stealthy.return_value = mock_stealthy_instance
@@ -88,6 +89,7 @@ class TestPublixFetcherFirstStrategy:
 
         mock_stealthy_instance = MagicMock()
         mock_stealthy_page = MagicMock()
+        mock_stealthy_page.status = 200
         mock_stealthy_page.body = '<html><body></body></html>'
         mock_stealthy_instance.fetch.return_value = mock_stealthy_page
         mock_stealthy.return_value = mock_stealthy_instance
@@ -118,6 +120,7 @@ class TestPublixFetcherFirstStrategy:
 
         mock_stealthy_instance = MagicMock()
         mock_stealthy_page = MagicMock()
+        mock_stealthy_page.status = 200
         mock_stealthy_page.body = '<html><body></body></html>'
         mock_stealthy_instance.fetch.return_value = mock_stealthy_page
         mock_stealthy.return_value = mock_stealthy_instance
@@ -142,6 +145,7 @@ class TestPublixFetcherFirstStrategy:
 
         mock_stealthy_instance = MagicMock()
         mock_stealthy_page = MagicMock()
+        mock_stealthy_page.status = 200
         mock_stealthy_page.body = '<html><body></body></html>'
         mock_stealthy_instance.fetch.return_value = mock_stealthy_page
         mock_stealthy.return_value = mock_stealthy_instance
