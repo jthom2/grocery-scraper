@@ -1,7 +1,4 @@
-try:
-    import orjson
-except ImportError:
-    import json as orjson
+import orjson
 import re
 import uuid
 import time

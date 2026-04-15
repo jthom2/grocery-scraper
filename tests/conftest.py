@@ -1,8 +1,5 @@
 import unittest.mock
-try:
-    import orjson
-except ImportError:
-    import json as orjson
+import orjson
 import re
 from pathlib import Path
 from unittest.mock import MagicMock

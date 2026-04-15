@@ -33,10 +33,7 @@ class TestKrogerStealthyFetcherPerformance:
             }
         }
 
-        try:
-            import orjson
-        except ImportError:
-            import json as orjson
+        import orjson
         state_json = orjson.dumps(initial_state).decode().replace("'", "\\'")
         return f"""
         <html>
@@ -224,10 +221,7 @@ class TestKrogerPageExtractionPerformance:
         self,
         performance_timer,
     ):
-        try:
-            import orjson
-        except ImportError:
-            import json as orjson
+        import orjson
         import re
 
         large_state = {

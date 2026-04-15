@@ -1,8 +1,5 @@
 import re
-try:
-    import orjson
-except ImportError:
-    import json as orjson
+import orjson
 import logging
 import urllib.parse
 

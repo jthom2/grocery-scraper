@@ -1,8 +1,5 @@
 # validates walmart search handles various api response shapes
-try:
-    import orjson
-except ImportError:
-    import json as orjson
+import orjson
 
 import pytest
 

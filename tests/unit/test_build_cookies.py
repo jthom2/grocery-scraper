@@ -1,9 +1,6 @@
 # ensures cookies match walmart's expected format for location scoping
 import base64
-try:
-    import orjson
-except ImportError:
-    import json as orjson
+import orjson
 import uuid
 from urllib.parse import unquote
 

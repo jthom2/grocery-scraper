@@ -1,8 +1,5 @@
 import uuid
-try:
-    import orjson
-except ImportError:
-    import json as orjson
+import orjson
 import base64
 import time
 from urllib.parse import quote

@@ -1,8 +1,5 @@
 # fixtures for measuring and tracking performance regressions
-try:
-    import orjson
-except ImportError:
-    import json as orjson
+import orjson
 import time
 from pathlib import Path
 from unittest.mock import MagicMock

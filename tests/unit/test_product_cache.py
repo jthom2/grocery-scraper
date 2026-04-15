@@ -1,9 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-try:
-    import orjson
-except ImportError:
-    import json as orjson
+import orjson
 import redis
 from app.utils.product_cache import ProductCache
 
