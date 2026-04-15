@@ -1,5 +1,5 @@
 class ScraperError(Exception):
-    """Base class for all scraper-related errors."""
+    # base class for all scraper-related errors
     def __init__(self, message: str, status_code: int | None = None, url: str | None = None):
         super().__init__(message)
         self.message = message
@@ -8,20 +8,20 @@ class ScraperError(Exception):
 
 
 class ScraperNetworkError(ScraperError):
-    """Raised when a network-level error occurs (e.g., timeout, DNS)."""
+    # raised when a network-level error occurs (e.g., timeout, DNS)
     pass
 
 
 class ScraperBlockedError(ScraperError):
-    """Raised when the scraper is blocked by anti-bot measures (e.g., 403, 429)."""
+    # raised when the scraper is blocked by anti-bot measures (e.g., 403, 429)
     pass
 
 
 class ScraperParsingError(ScraperError):
-    """Raised when the scraper fails to parse the response data (e.g., selector changes)."""
+    # raised when the scraper fails to parse the response data (e.g., selector changes)
     pass
 
 
 class ScraperDataNotFoundError(ScraperError):
-    """Raised when the requested data (product/store) is not found on the page."""
+    # raised when the requested data (product/store) is not found on the page
     pass

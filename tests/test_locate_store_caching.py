@@ -1,9 +1,7 @@
 import unittest.mock
-"""
-Integration tests for locate_store caching across all retailers.
-Tests that calling each retailer's locate_store function twice with the same ZIP
-uses cache on the second call (should be faster and make fewer network requests).
-"""
+# integration tests for locate_store caching across all retailers
+# tests that calling each retailer's locate_store function twice with the same ZIP
+# uses cache on the second call (should be faster and make fewer network requests)
 import time
 from unittest.mock import patch, MagicMock
 
@@ -17,7 +15,7 @@ from app.aldi import locate_store as aldi_locate
 
 @pytest.mark.integration
 class TestWalmartLocateCaching:
-    """Test Walmart locate_store caching with same ZIP twice."""
+    # test Walmart locate_store caching with same ZIP twice
 
     def setup_method(self):
         from app.utils.store_cache import store_cache
@@ -37,7 +35,7 @@ class TestWalmartLocateCaching:
     @patch('app.walmart.locate_store.get_next_data.get_next_data')
     @patch('app.walmart.locate_store.fetcher.fetch')
     def test_walmart_cache_hit_on_second_call(self, mock_fetch, mock_get_next_data, mock_zip2loc):
-        """Second call with same ZIP should use cache, not fetch."""
+        # second call with same ZIP should use cache, not fetch
         mock_zip2loc.return_value = ('Seattle', 'WA')
 
         # Mock the page object with css() and text attributes
@@ -89,7 +87,7 @@ class TestWalmartLocateCaching:
 
 @pytest.mark.integration
 class TestKrogerLocateCaching:
-    """Test Kroger locate_store caching with same ZIP twice."""
+    # test Kroger locate_store caching with same ZIP twice
 
     def setup_method(self):
         from app.utils.store_cache import store_cache
@@ -107,7 +105,7 @@ class TestKrogerLocateCaching:
 
     @patch('app.kroger.locate_store.fetcher.fetch')
     def test_kroger_cache_hit_on_second_call(self, mock_fetch):
-        """Second call with same ZIP should use cache."""
+        # second call with same ZIP should use cache
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json.return_value = {
@@ -151,7 +149,7 @@ class TestKrogerLocateCaching:
 
 @pytest.mark.integration
 class TestPublixLocateCaching:
-    """Test Publix locate_store caching with same ZIP twice."""
+    # test Publix locate_store caching with same ZIP twice
 
     def setup_method(self):
         from app.utils.store_cache import store_cache
@@ -169,7 +167,7 @@ class TestPublixLocateCaching:
 
     @patch('app.publix.locate_store.fetcher.fetch')
     def test_publix_cache_hit_on_second_call(self, mock_fetch):
-        """Second call with same ZIP should use cache."""
+        # second call with same ZIP should use cache
         mock_response = MagicMock()
         mock_response.json.return_value = {
             'stores': [{
@@ -206,7 +204,7 @@ class TestPublixLocateCaching:
 
 @pytest.mark.integration
 class TestAldiLocateCaching:
-    """Test Aldi locate_store caching with same ZIP twice."""
+    # test Aldi locate_store caching with same ZIP twice
 
     def setup_method(self):
         from app.utils.store_cache import store_cache
@@ -225,7 +223,7 @@ class TestAldiLocateCaching:
     @patch('app.aldi.locate_store._fetch_shops_direct')
     @patch('app.aldi.locate_store._prime_session')
     def test_aldi_cache_hit_on_second_call(self, mock_prime_session, mock_fetch_shops):
-        """Second call with same ZIP should use cache."""
+        # second call with same ZIP should use cache
         # Mock the shops response from direct fetch
         mock_fetch_shops.return_value = [{
             'id': '1',
