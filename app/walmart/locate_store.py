@@ -18,7 +18,7 @@ def find_stores(zip_code, max_stores=4):
         print(f"Error: Could not find location for zip code '{zip_code}'.")
         return []
 
-    url = f'{STORE_DIRECTORY_URL}/{quote(state)}/{quote(city)}'
+    url = f'{STORE_DIRECTORY_URL}/{quote(state, safe="")}/{quote(city, safe="")}'
     page = fetcher.fetch(url)
 
     next_data, data = get_next_data.get_next_data(page)

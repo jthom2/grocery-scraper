@@ -1,3 +1,4 @@
+from unittest.mock import patch, MagicMock
 # validates kroger search with browser automation stays fast
 import pytest
 from unittest.mock import MagicMock
@@ -46,6 +47,7 @@ class TestKrogerStealthyFetcherPerformance:
 
     # browser overhead is ~800-1200ms, this establishes reference
     @pytest.mark.perf_baseline
+    @patch("app.kroger.search_products.StealthyFetcher")
     def test_kroger_stealthy_search_baseline(
         self,
         mock_stealthy_fetcher,

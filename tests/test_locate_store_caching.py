@@ -1,3 +1,4 @@
+import unittest.mock
 """
 Integration tests for locate_store caching across all retailers.
 Tests that calling each retailer's locate_store function twice with the same ZIP
@@ -17,6 +18,20 @@ from app.aldi import locate_store as aldi_locate
 @pytest.mark.integration
 class TestWalmartLocateCaching:
     """Test Walmart locate_store caching with same ZIP twice."""
+
+    def setup_method(self):
+        from app.utils.store_cache import store_cache
+        store_cache._client = MagicMock()
+        self.cache_data = {}
+        def mock_get(k, default=None): return self.cache_data.get(k)
+        def mock_set(k, v, *args, **kwargs): self.cache_data[k] = v
+        store_cache._client.get = mock_get
+        store_cache._client.setex = mock_set
+
+        # Actually it's probably using Redis, so we can just mock store_cache methods
+        store_cache.get = lambda retailer, zip_code: self.cache_data.get(f"{retailer}:{zip_code}")
+        store_cache.set = lambda retailer, zip_code, stores, ttl_hours=1: self.cache_data.update({f"{retailer}:{zip_code}": stores})
+
 
     @patch('app.walmart.locate_store.zip2loc.get_city_state')
     @patch('app.walmart.locate_store.get_next_data.get_next_data')
@@ -76,6 +91,20 @@ class TestWalmartLocateCaching:
 class TestKrogerLocateCaching:
     """Test Kroger locate_store caching with same ZIP twice."""
 
+    def setup_method(self):
+        from app.utils.store_cache import store_cache
+        store_cache._client = MagicMock()
+        self.cache_data = {}
+        def mock_get(k, default=None): return self.cache_data.get(k)
+        def mock_set(k, v, *args, **kwargs): self.cache_data[k] = v
+        store_cache._client.get = mock_get
+        store_cache._client.setex = mock_set
+
+        # Actually it's probably using Redis, so we can just mock store_cache methods
+        store_cache.get = lambda retailer, zip_code: self.cache_data.get(f"{retailer}:{zip_code}")
+        store_cache.set = lambda retailer, zip_code, stores, ttl_hours=1: self.cache_data.update({f"{retailer}:{zip_code}": stores})
+
+
     @patch('app.kroger.locate_store.fetcher.fetch')
     def test_kroger_cache_hit_on_second_call(self, mock_fetch):
         """Second call with same ZIP should use cache."""
@@ -124,6 +153,20 @@ class TestKrogerLocateCaching:
 class TestPublixLocateCaching:
     """Test Publix locate_store caching with same ZIP twice."""
 
+    def setup_method(self):
+        from app.utils.store_cache import store_cache
+        store_cache._client = MagicMock()
+        self.cache_data = {}
+        def mock_get(k, default=None): return self.cache_data.get(k)
+        def mock_set(k, v, *args, **kwargs): self.cache_data[k] = v
+        store_cache._client.get = mock_get
+        store_cache._client.setex = mock_set
+
+        # Actually it's probably using Redis, so we can just mock store_cache methods
+        store_cache.get = lambda retailer, zip_code: self.cache_data.get(f"{retailer}:{zip_code}")
+        store_cache.set = lambda retailer, zip_code, stores, ttl_hours=1: self.cache_data.update({f"{retailer}:{zip_code}": stores})
+
+
     @patch('app.publix.locate_store.fetcher.fetch')
     def test_publix_cache_hit_on_second_call(self, mock_fetch):
         """Second call with same ZIP should use cache."""
@@ -164,6 +207,20 @@ class TestPublixLocateCaching:
 @pytest.mark.integration
 class TestAldiLocateCaching:
     """Test Aldi locate_store caching with same ZIP twice."""
+
+    def setup_method(self):
+        from app.utils.store_cache import store_cache
+        store_cache._client = MagicMock()
+        self.cache_data = {}
+        def mock_get(k, default=None): return self.cache_data.get(k)
+        def mock_set(k, v, *args, **kwargs): self.cache_data[k] = v
+        store_cache._client.get = mock_get
+        store_cache._client.setex = mock_set
+
+        # Actually it's probably using Redis, so we can just mock store_cache methods
+        store_cache.get = lambda retailer, zip_code: self.cache_data.get(f"{retailer}:{zip_code}")
+        store_cache.set = lambda retailer, zip_code, stores, ttl_hours=1: self.cache_data.update({f"{retailer}:{zip_code}": stores})
+
 
     @patch('app.aldi.locate_store._fetch_shops_direct')
     @patch('app.aldi.locate_store._prime_session')
