@@ -1,5 +1,8 @@
 # cli tool for managing and comparing performance baselines
-import orjson
+try:
+    import orjson
+except ImportError:
+    import json as orjson
 import argparse
 from pathlib import Path
 from typing import Optional, Dict, List

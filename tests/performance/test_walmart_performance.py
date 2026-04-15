@@ -1,5 +1,8 @@
 # validates walmart search latency stays within acceptable bounds
-import orjson
+try:
+    import orjson
+except ImportError:
+    import json as orjson
 import pytest
 
 from app.walmart.search_products import search

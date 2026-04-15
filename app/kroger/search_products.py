@@ -1,5 +1,8 @@
 import re
-import orjson
+try:
+    import orjson
+except ImportError:
+    import json as orjson
 import logging
 import urllib.parse
 
@@ -20,6 +23,10 @@ from app.errors import ScraperParsingError, ScraperBlockedError
 
 
 # extracts the initial state json object from page scripts
+INITIAL_STATE_PATTERN = re.compile(r"JSON\.parse\('(.+)'\)", re.DOTALL)
+NUMERIC_PRICE_PATTERN = re.compile(r'[\d.]+')
+
+# extracts the initial state json object from page scripts
 def extract_initial_state(page):
     if page.status == 403 or page.status == 429:
         raise ScraperBlockedError(f"Blocked by anti-bot: {page.status}", status_code=page.status, url=page.url)
@@ -28,7 +35,7 @@ def extract_initial_state(page):
     for script in scripts:
         text = script.text or ''
         if '__INITIAL_STATE__' in text:
-            match = re.search(r"JSON\.parse\('(.+)'\)", text, re.DOTALL)
+            match = INITIAL_STATE_PATTERN.search(text)
             if match:
                 json_str = match.group(1)
                 json_str = json_str.encode('utf-8').decode('unicode_escape')
@@ -51,7 +58,7 @@ def extract_numeric_price(price_value):
     if isinstance(price_value, (int, float)):
         return float(price_value)
     if isinstance(price_value, str):
-        match = re.search(r'[\d.]+', price_value)
+        match = NUMERIC_PRICE_PATTERN.search(price_value)
         if match:
             return float(match.group(0))
     return None
@@ -64,7 +71,7 @@ def search(query, cookies=None, location_id=None, max_results=5):
         return cached_results[:max_results]
 
     params = {'query': query, 'searchType': 'default_search'}
-    url = f"{SEARCH_URL}?{urllib.parse.urlencode(params)}"
+    url = f"{SEARCH_URL}?{urllib.parse.urlencode(params, quote_via=urllib.parse.quote, safe="")}"
 
     playwright_cookies = _dict_cookies_to_playwright(cookies) if isinstance(cookies, dict) else cookies
 

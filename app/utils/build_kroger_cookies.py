@@ -1,4 +1,7 @@
-import orjson
+try:
+    import orjson
+except ImportError:
+    import json as orjson
 import time
 
 

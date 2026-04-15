@@ -1,5 +1,8 @@
 import os
-import orjson
+try:
+    import orjson
+except ImportError:
+    import json as orjson
 import redis
 from typing import Any
 

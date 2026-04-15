@@ -15,8 +15,15 @@ logger = logging.getLogger(__name__)
 
 
 # checks if html contains product price data to validate search success
+PRODUCT_CONTENT_PATTERN = re.compile(r'aria-label="\$[\d.]+')
+REDIRECT_URL_PATTERN = re.compile(r'(searchtermredirect=[^&]+)')
+HREF_PATTERN = re.compile(r'/pd/([^/]+)/(RIO-PCI-\d+)')
+PRICE_PATTERN = re.compile(r'(\$[\d.]+(?:\s+or\s+\d+\s+for\s+\$[\d.]+)?|\d+\s+for\s+\$[\d.]+(?:\s*/\s*[a-zA-Z\d\.]+)?|\$[\d.]+(?:\s*/\s*[a-zA-Z\d\.]+)?)\s*-\s*(.+)')
+NUMERIC_PRICE_PATTERN = re.compile(r'\$([0-9]+(?:\.[0-9]+)?)')
+
+# checks if html contains product price data to validate search success
 def _has_product_content(html):
-    return bool(re.search(r'aria-label="\$[\d.]+', html))
+    return bool(PRODUCT_CONTENT_PATTERN.search(html))
 
 
 from app.errors import ScraperBlockedError, ScraperParsingError, ScraperNetworkError
@@ -29,7 +36,7 @@ def search(query, location_id=None, max_results=15):
     if location_id and (cached_results := product_cache.get('publix', str(location_id), query)):
         return cached_results[:max_results]
 
-    url = f"{SEARCH_URL}?searchTerm={urllib.parse.quote(query)}&facet=promoType%3A%3Atrue"
+    url = f"{SEARCH_URL}?searchTerm={urllib.parse.quote(query, safe="")}&facet=promoType%3A%3Atrue"
 
     cookie_dict = None
     cookies = None
@@ -73,8 +80,7 @@ def search(query, location_id=None, max_results=15):
             redirect_url = f"{BASE_URL}{redirect_url}"
 
         if "searchtermredirect=" in redirect_url and "facet=" not in redirect_url:
-            redirect_url = re.sub(
-                r'(searchtermredirect=[^&]+)',
+            redirect_url = REDIRECT_URL_PATTERN.sub(
                 r'\1&facet=promoType%3A%3Atrue',
                 redirect_url
             )
@@ -124,7 +130,7 @@ def extract_products(page, html, max_results, location_id=None):
         aria_label = link.get('aria-label', '')
         
         # extract product_id and name_slug from href using regex (resilient to href structure changes)
-        href_match = re.search(r'/pd/([^/]+)/(RIO-PCI-\d+)', href)
+        href_match = HREF_PATTERN.search(href)
         if not href_match:
             continue
         
@@ -135,10 +141,7 @@ def extract_products(page, html, max_results, location_id=None):
             continue
         
         # parse aria-label to extract price and product name
-        price_match = re.match(
-            r'(\$[\d.]+(?:\s+or\s+\d+\s+for\s+\$[\d.]+)?|\d+\s+for\s+\$[\d.]+(?:\s*/\s*[a-zA-Z\d\.]+)?|\$[\d.]+(?:\s*/\s*[a-zA-Z\d\.]+)?)\s*-\s*(.+)',
-            aria_label
-        )
+        price_match = PRICE_PATTERN.match(aria_label)
         
         if not price_match:
             continue
@@ -148,7 +151,7 @@ def extract_products(page, html, max_results, location_id=None):
         name = price_match.group(2).strip()
         brand = name.split()[0] if name else None
         
-        numeric_match = re.search(r'\$([0-9]+(?:\.[0-9]+)?)', price)
+        numeric_match = NUMERIC_PRICE_PATTERN.search(price)
         parsed_price = None
         if numeric_match:
             try:
