@@ -1,8 +1,9 @@
+import unittest.mock
 # validates aldi's 7-request flow stays optimized
 import pytest
 from unittest.mock import MagicMock
 
-from app.aldi.search_products import search
+from app.aldi.client import AldiClient
 from tests.performance.assertions import (
     assert_latency_under,
     assert_cache_hit_rate,
@@ -110,10 +111,9 @@ class TestAldiSessionTokenCaching:
         mock_fetcher,
         performance_timer,
         perf_baseline,
-        mocker,
     ):
         # Mock product_cache to avoid Redis timeouts
-        mocker.patch("app.aldi.search_products.product_cache")
+        unittest.mock.patch("app.aldi.client.product_cache").start()
         
         responses = _create_mock_aldi_responses()
 
@@ -146,7 +146,7 @@ class TestAldiSessionTokenCaching:
         mock_fetcher.side_effect = mock_fetch_side_effect
 
         with performance_timer() as timer:
-            results = search("cheese", zip_code="10001", max_results=2)
+            results = AldiClient().search_products("cheese", zip_code="10001", max_results=2)
 
         # Ensure we got results to confirm search actually ran
         assert len(results) > 0
@@ -167,9 +167,8 @@ class TestAldiSessionTokenCaching:
         mock_http_with_delay,
         monkeypatch,
         performance_timer,
-        mocker,
     ):
-        mocker.patch("app.aldi.search_products.product_cache")
+        unittest.mock.patch("app.aldi.client.product_cache").start()
         delays = [200, 150, 100, 200, 100, 150, 100]  # ~1000ms total
         call_count = [0]
 
@@ -187,7 +186,7 @@ class TestAldiSessionTokenCaching:
         with performance_timer() as timer:
             try:
                 # This will fail due to incomplete mocking, but we measure latency
-                results = search("cheese", zip_code="10001", max_results=1)
+                results = AldiClient().search_products("cheese", zip_code="10001", max_results=1)
             except Exception:
                 pass
 
@@ -202,9 +201,8 @@ class TestAldiSessionTokenCaching:
         mock_fetcher,
         monkeypatch,
         performance_timer,
-        mocker,
     ):
-        mocker.patch("app.aldi.search_products.product_cache")
+        unittest.mock.patch("app.aldi.client.product_cache").start()
         def mock_fetch_tracking(url, *args, **kwargs):
             mock_request_tracker.add_request(url, 100)  # 100ms per request
             resp = MagicMock()
@@ -217,7 +215,7 @@ class TestAldiSessionTokenCaching:
 
         with performance_timer() as timer:
             try:
-                results = search("cheese", zip_code="10001", max_results=1)
+                results = AldiClient().search_products("cheese", zip_code="10001", max_results=1)
             except Exception:
                 pass
 
@@ -327,9 +325,8 @@ class TestAldiSearchRegressions:
         mock_fetcher,
         performance_timer,
         perf_baseline,
-        mocker,
     ):
-        mocker.patch("app.aldi.search_products.product_cache")
+        unittest.mock.patch("app.aldi.client.product_cache").start()
         baseline = perf_baseline.get_baseline("aldi_cold_start_latency")
         if baseline is None:
             pytest.skip("Baseline not established yet")
@@ -357,7 +354,7 @@ class TestAldiSearchRegressions:
         mock_fetcher.side_effect = mock_fetch_side_effect
 
         with performance_timer() as timer:
-            search("cheese", zip_code="10001", max_results=2)
+            AldiClient().search_products("cheese", zip_code="10001", max_results=2)
 
         assert_no_regression(
             actual_ms=timer.get_ms(),

@@ -2,7 +2,7 @@
 import orjson
 import pytest
 
-from app.walmart.search_products import search
+from app.walmart.client import WalmartClient
 from tests.performance.assertions import (
     assert_latency_under,
     assert_no_regression,
@@ -59,7 +59,7 @@ class TestWalmartSearchPerformance:
         mock_fetcher.return_value = mock_page_factory(body=html)
 
         with performance_timer() as timer:
-            results = search("test query", max_results=5)
+            results = WalmartClient()._fetch_products("test query", max_results=5)
 
         assert len(results) == 5
         assert timer.get_ms() < 700  # Baseline with 50ms tolerance
@@ -85,7 +85,7 @@ class TestWalmartSearchPerformance:
         mock_fetcher.return_value = mock_page_factory(body=html)
 
         with performance_timer() as timer:
-            results = search("test query", max_results=5)
+            results = WalmartClient()._fetch_products("test query", max_results=5)
 
         assert len(results) == 5
         assert_latency_under(
@@ -115,7 +115,7 @@ class TestWalmartSearchPerformance:
         cookies = {"assortmentStoreId": "123"}
 
         with performance_timer() as timer:
-            results = search("test query", cookies=cookies, max_results=5)
+            results = WalmartClient()._fetch_products("test query", cookies=cookies, max_results=5)
 
         assert len(results) == 5
         assert_latency_under(timer.get_ms(), threshold_ms=700, tolerance_pct=10)
@@ -132,7 +132,7 @@ class TestWalmartSearchPerformance:
         mock_fetcher.return_value = mock_page_factory(body=html)
 
         with performance_timer() as timer:
-            results = search("test query", max_results=10)
+            results = WalmartClient()._fetch_products("test query", max_results=10)
 
         assert len(results) == 10
         assert_latency_under(timer.get_ms(), threshold_ms=750, tolerance_pct=10)
@@ -151,7 +151,7 @@ class TestWalmartSearchPerformance:
         measurements = []
         for _ in range(3):
             with performance_timer() as timer:
-                results = search("test query", max_results=5)
+                results = WalmartClient()._fetch_products("test query", max_results=5)
             assert len(results) == 5
             measurements.append(timer.get_ms())
 
@@ -212,7 +212,7 @@ class TestWalmartSearchRegressions:
         mock_fetcher.return_value = mock_page_factory(body=html)
 
         with performance_timer() as timer:
-            results = search("test query", max_results=5)
+            results = WalmartClient()._fetch_products("test query", max_results=5)
 
         assert len(results) == 5
         assert_no_regression(

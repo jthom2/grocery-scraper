@@ -17,7 +17,7 @@ from app.errors import ScraperNetworkError, ScraperParsingError, ScraperDataNotF
 
 @lru_cache(maxsize=256)
 def _fetch_from_api(zip_code):
-    """Fetch zip code data from external API (cached separately for rare misses)"""
+    # fetch zip code data from external API (cached separately for rare misses)
     url = f"https://api.zippopotam.us/us/{zip_code}"
     try:
         response = requests.get(url, timeout=10)
@@ -41,11 +41,9 @@ def _fetch_from_api(zip_code):
 
 
 def get_city_state(zip_code):
-    """
-    Get city and state for a zip code with aggressive caching.
-    Checks TTL cache first (24-hour), then falls back to external API.
-    This cache-aside pattern eliminates one network round-trip for repeated ZIP lookups.
-    """
+    # get city and state for a zip code with aggressive caching
+    # checks TTL cache first (24-hour), then falls back to external API
+    # this cache-aside pattern eliminates one network round-trip for repeated ZIP lookups
     cached = _ZIP_CACHE.get(zip_code)
     if cached is not None:
         return cached

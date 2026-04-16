@@ -91,7 +91,7 @@ def performance_timer():
 
 # simulates network latency in unit tests
 @pytest.fixture
-def mock_http_with_delay(mocker):
+def mock_http_with_delay():
     def _mock_fetch_with_delay(delay_ms: float, status: int = 200, body: str = ""):
         def mock_fetch(*args, **kwargs):
             time.sleep(delay_ms / 1000)

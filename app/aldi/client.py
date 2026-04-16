@@ -1,17 +1,22 @@
-import orjson
+import time
 import re
 import uuid
-import time
+import orjson
+import logging
+import requests
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from app.models import normalize_location
 from app.utils import fetcher, display
 from app.utils.cache import TTLCache
+from app.utils.store_client import BaseStoreClient
 from app.utils.product_cache import product_cache
 from app.aldi.parser import normalize_item, parse_price
 from app.aldi.constants import (
     BASE_URL,
     SEARCH_URL,
+    STORE_FRONT_URL,
     GRAPHQL_URL,
     IDP_LOCATION_URL,
     IDP_SHOPS_URL,
@@ -23,13 +28,77 @@ from app.aldi.constants import (
     ITEMS_HASH,
 )
 
+from app.errors import ScraperNetworkError, ScraperBlockedError, ScraperParsingError
+
+logger = logging.getLogger(__name__)
 
 ITEM_ID_PATTERN = re.compile(r'"(items_[0-9]+-[0-9]+)"')
 
+_SESSION_CACHE = TTLCache(ttl_seconds=15 * 60)
 _SESSION_TOKEN_CACHE = TTLCache(ttl_seconds=15 * 60)
+_REQUEST_TIMEOUT = 8
+_SESSION = requests.Session()
 
 
-from app.errors import ScraperNetworkError, ScraperBlockedError, ScraperParsingError
+def _prime_session(force_refresh=False):
+    cached = _SESSION_CACHE.get('session')
+    if cached and not force_refresh:
+        return cached
+
+    # attempt to get instacart_sid first via requests (faster)
+    try:
+        warmup = _SESSION.get(SEARCH_URL, timeout=_REQUEST_TIMEOUT, headers={"Referer": SEARCH_URL})
+        instacart_sid = _SESSION.cookies.get('__Host-instacart_sid')
+    except requests.RequestException:
+        instacart_sid = None
+
+    # also get full cookies/referer via fetcher for fallback path
+    entry = fetcher.fetch(SEARCH_URL)
+    referer = SEARCH_URL
+    if entry.status != 200:
+        entry = fetcher.fetch(STORE_FRONT_URL)
+        referer = STORE_FRONT_URL
+
+    if entry.status == 403 or entry.status == 429:
+        raise ScraperBlockedError(f"Blocked by anti-bot: {entry.status}", status_code=entry.status, url=entry.url)
+    elif entry.status != 200:
+        raise ScraperNetworkError(f"Failed to prime session. Status: {entry.status}", status_code=entry.status, url=entry.url)
+
+    session_data = {
+        'cookies': entry.cookies,
+        'referer': referer,
+        'instacart_sid': instacart_sid
+    }
+    _SESSION_CACHE.set('session', session_data)
+    return session_data
+
+
+def _fetch_shops_direct(zip_code, force_refresh=False):
+    session = _prime_session(force_refresh=force_refresh)
+    if not session['instacart_sid']:
+        return None
+
+    try:
+        response = _SESSION.get(
+            IDP_SHOPS_URL,
+            params={'postal_code': zip_code},
+            cookies={'__Host-instacart_sid': session['instacart_sid']},
+            headers={"Referer": SEARCH_URL},
+            timeout=_REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as e:
+        raise ScraperNetworkError(f"Direct shop fetch failed: {e}", url=IDP_SHOPS_URL)
+
+    if response.status_code == 401 and not force_refresh:
+        return _fetch_shops_direct(zip_code, force_refresh=True)
+
+    if response.status_code == 403 or response.status_code == 429:
+        raise ScraperBlockedError(f"Blocked by anti-bot: {response.status_code}", status_code=response.status_code, url=IDP_SHOPS_URL)
+
+    try:
+        return response.json().get('shops', []) if response.status_code == 200 else None
+    except (ValueError, AttributeError):
+        raise ScraperParsingError(f"Failed to parse direct shop response", status_code=response.status_code, url=IDP_SHOPS_URL)
 
 
 # executes a graphql persisted query and returns the data payload or empty dict on error
@@ -282,60 +351,123 @@ def _process_items_batch(item_ids, search_context, max_results):
     return results
 
 
-# orchestrates the complete search flow from context setup through product normalization and filtering
-def search(query, location_id=None, zip_code=None, max_results=5):
-    if max_results <= 0:
-        return []
+class AldiClient(BaseStoreClient):
 
-    # resolve zip_code early to use as cache key component
-    initial_page = fetcher.fetch(SEARCH_URL, params={'k': query})
-    initial_cookies = initial_page.cookies
-    initial_referer = str(initial_page.url)
-    
-    resolved_zip = zip_code or get_default_zip(initial_cookies, initial_referer)
-    if not resolved_zip:
-        return []
-    
-    # attempt to retrieve from cache (Cache-Aside: Read)
-    # cache key includes zip_code to ensure location-specific isolation
-    if location_id and (cached_results := product_cache.get('aldi', f"{location_id}:{resolved_zip}", query)):
-        return cached_results[:max_results]
+    @property
+    def retailer_name(self) -> str:
+        return "aldi"
 
-    search_context = build_search_context(query, location_id=location_id, zip_code=zip_code)
-    if not search_context:
-        return []
+    def _fetch_stores(self, zip_code, max_results=10):
+        shops_data = _fetch_shops_direct(zip_code)
+        
+        # fallback to fetcher if direct requests failed
+        if shops_data is None:
+            session = _prime_session()
+            if not session['cookies']:
+                return []
+                
+            page = fetcher.fetch(
+                IDP_SHOPS_URL,
+                params={'postal_code': zip_code},
+                cookies=session['cookies'],
+                headers={"Referer": session['referer']},
+            )
+            if page.status == 401:
+                session = _prime_session(force_refresh=True)
+                page = fetcher.fetch(
+                    IDP_SHOPS_URL,
+                    params={'postal_code': zip_code},
+                    cookies=session['cookies'],
+                    headers={"Referer": session['referer']},
+                )
+            shops_data = page.json().get('shops', []) if page.status == 200 else []
 
-    placements = fetch_search_placements(
-        query,
-        search_context['zip_code'],
-        search_context['location_id'],
-        search_context['token'],
-        search_context['cookies'],
-        search_context['referer'],
-        max_results=max_results,
-    )
-    if not placements:
-        return []
+        stores = []
+        for shop in (shops_data or [])[:max_results]:
+            addr = shop.get('address', {})
+            street, city, state, postal = addr.get('street_address', ''), addr.get('city', ''), addr.get('state', ''), addr.get('postal_code', '')
+            
+            stores.append(normalize_location({
+                'retailer': 'aldi',
+                'name': shop.get('location_name') or shop.get('name') or 'ALDI',
+                'location_id': str(shop.get('id')),
+                'address': f"{street}, {city}, {state} {postal}".strip(", ") or None,
+                'city': city or None,
+                'state': state or None,
+                'postal_code': postal or None,
+                'phone': shop.get('phone_number'),
+                'service_type': shop.get('fulfillment_option'),
+                'metadata': {
+                    'location_code': shop.get('location_code'),
+                    'city_state_zip': f"{city}, {state} {postal}".strip(", "),
+                },
+            }))
 
-    item_ids = extract_item_ids(placements, max_ids=max(max_results * 8, 24))
-    if not item_ids:
-        return []
+        return stores
 
-    results = _process_items_batch(item_ids, search_context, max_results)
-    
-    # store in cache for 12 hours (Cache-Aside: Write)
-    if search_context['location_id'] and search_context['zip_code'] and results:
-        product_cache.set('aldi', f"{search_context['location_id']}:{search_context['zip_code']}", query, results)
-    
-    return results
+    # orchestrates the complete search flow from context setup through product normalization and filtering
+    def _fetch_products(self, query, location_id=None, max_results=5, **kwargs):
+        zip_code = kwargs.get('zip_code')
+
+        if max_results <= 0:
+            return []
+
+        # resolve zip_code early to use as cache key component
+        initial_page = fetcher.fetch(SEARCH_URL, params={'k': query})
+        initial_cookies = initial_page.cookies
+        initial_referer = str(initial_page.url)
+        
+        resolved_zip = zip_code or get_default_zip(initial_cookies, initial_referer)
+        if not resolved_zip:
+            return []
+
+        search_context = build_search_context(query, location_id=location_id, zip_code=zip_code)
+        if not search_context:
+            return []
+
+        placements = fetch_search_placements(
+            query,
+            search_context['zip_code'],
+            search_context['location_id'],
+            search_context['token'],
+            search_context['cookies'],
+            search_context['referer'],
+            max_results=max_results,
+        )
+        if not placements:
+            return []
+
+        item_ids = extract_item_ids(placements, max_ids=max(max_results * 8, 24))
+        if not item_ids:
+            return []
+
+        return _process_items_batch(item_ids, search_context, max_results)
+
+    def search_products(self, query, location_id=None, max_results=5, **kwargs):
+        # aldi uses a composite cache key with zip_code for location-specific isolation
+        zip_code = kwargs.get('zip_code')
+
+        if max_results <= 0:
+            return []
+
+        # resolve zip early for cache key
+        if location_id and zip_code:
+            cache_key = f"{location_id}:{zip_code}"
+            if cached := product_cache.get('aldi', cache_key, query):
+                return cached[:max_results]
+
+        results = self._fetch_products(query, location_id=location_id, max_results=max_results, **kwargs)
+
+        # cache with composite key
+        if location_id and zip_code and results:
+            product_cache.set('aldi', f"{location_id}:{zip_code}", query, results)
+
+        return results
 
 
-# formats and prints search results in a human-readable table layout
-def display_results(results, query):
-    display.display_products(results, query, "Aldi")
+def main():
+    AldiClient().run_search_cli()
 
 
 if __name__ == "__main__":
-    query = input("Search Aldi for: ")
-    results = search(query)
-    display_results(results, query)
+    main()

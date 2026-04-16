@@ -1,3 +1,4 @@
+import unittest.mock
 import orjson
 import re
 from pathlib import Path
@@ -76,36 +77,47 @@ def mock_page_factory():
 
 # patches http fetcher at app level for search tests
 @pytest.fixture
-def mock_fetcher(mocker):
-    return mocker.patch("app.utils.fetcher.fetch")
+def mock_fetcher():
+    patcher = unittest.mock.patch("app.utils.fetcher.fetch")
+    mock = patcher.start()
+    yield mock
+    patcher.stop()
 
 
 # patches at scrapling level when app-level patch is insufficient
 @pytest.fixture
-def mock_scrapling_fetcher(mocker):
-    return mocker.patch("scrapling.fetchers.Fetcher.get")
+def mock_scrapling_fetcher():
+    patcher = unittest.mock.patch("scrapling.fetchers.Fetcher.get")
+    mock = patcher.start()
+    yield mock
+    patcher.stop()
 
 
 # avoids browser launch overhead in unit tests
 @pytest.fixture
-def mock_stealthy_fetcher(mocker):
-    mock_sf_class = mocker.patch("scrapling.StealthyFetcher")
+def mock_stealthy_fetcher():
+    patcher = unittest.mock.patch("scrapling.StealthyFetcher")
+    mock_sf_class = patcher.start()
     mock_sf_instance = MagicMock()
     mock_sf_class.return_value = mock_sf_instance
-    return mock_sf_instance
+    yield mock_sf_instance
+    patcher.stop()
 
 
 # clears lru_cache to prevent cross-test pollution
 @pytest.fixture
-def mock_requests_get(mocker):
+def mock_requests_get():
     from app.utils.zip2loc import _ZIP_CACHE, _fetch_from_api
-    from app.aldi.search_products import get_coordinates
+    from app.aldi.client import get_coordinates
 
     _ZIP_CACHE.clear()  # clear TTL cache
     _fetch_from_api.cache_clear()  # clear lru_cache on the fetch function
     get_coordinates.cache_clear()
 
-    return mocker.patch("requests.get")
+    patcher = unittest.mock.patch("requests.get")
+    mock = patcher.start()
+    yield mock
+    patcher.stop()
 
 
 # minimal fields to pass pydantic validation

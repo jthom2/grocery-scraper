@@ -189,9 +189,9 @@ class TestBrowserPoolSingleton:
 
 # verifies search function uses pool correctly
 class TestKrogerSearchWithPool:
-    @patch('app.kroger.search_products.get_browser_pool')
+    @patch('app.kroger.client.get_browser_pool')
     def test_search_uses_browser_pool(self, mock_get_pool):
-        from app.kroger.search_products import search, _USE_BROWSER_POOL
+        from app.kroger.client import KrogerClient, _USE_BROWSER_POOL
 
         if not _USE_BROWSER_POOL:
             pytest.skip("Browser pool disabled")
@@ -210,9 +210,9 @@ class TestKrogerSearchWithPool:
         mock_get_pool.assert_called_once()
         mock_pool.fetch.assert_called_once()
 
-    @patch('app.kroger.search_products.get_browser_pool')
+    @patch('app.kroger.client.get_browser_pool')
     def test_search_passes_cookies_to_pool(self, mock_get_pool):
-        from app.kroger.search_products import search, _USE_BROWSER_POOL
+        from app.kroger.client import KrogerClient, _USE_BROWSER_POOL
 
         if not _USE_BROWSER_POOL:
             pytest.skip("Browser pool disabled")

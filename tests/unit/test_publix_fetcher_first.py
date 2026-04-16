@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from app.publix.search_products import search, _has_product_content
+from app.publix.client import PublixClient, _has_product_content
 
 
 # validates content detection to decide fast vs slow path
@@ -29,8 +29,8 @@ class TestHasProductContent:
 
 # ensures fallback logic triggers correctly
 class TestPublixFetcherFirstStrategy:
-    @patch('app.publix.search_products.StealthyFetcher')
-    @patch('app.publix.search_products.Fetcher')
+    @patch('app.publix.client.StealthyFetcher')
+    @patch('app.publix.client.Fetcher')
     def test_uses_fast_path_when_fetcher_succeeds(self, mock_fetcher, mock_stealthy):
         mock_page = MagicMock()
         mock_page.status = 200
@@ -43,13 +43,14 @@ class TestPublixFetcherFirstStrategy:
         '''
         mock_fetcher.get.return_value = mock_page
 
-        results = search("milk", max_results=5)
+        client = PublixClient()
+        results = client._fetch_products("milk", max_results=5)
 
         mock_fetcher.get.assert_called_once()
         mock_stealthy.assert_not_called()
 
-    @patch('app.publix.search_products.StealthyFetcher')
-    @patch('app.publix.search_products.Fetcher')
+    @patch('app.publix.client.StealthyFetcher')
+    @patch('app.publix.client.Fetcher')
     def test_falls_back_to_stealthy_on_fetcher_failure(self, mock_fetcher, mock_stealthy):
         mock_fetcher.get.side_effect = Exception("Connection failed")
 
@@ -69,13 +70,14 @@ class TestPublixFetcherFirstStrategy:
         mock_stealthy_instance.fetch.return_value = mock_stealthy_page
         mock_stealthy.return_value = mock_stealthy_instance
 
-        results = search("milk", max_results=5)
+        client = PublixClient()
+        results = client._fetch_products("milk", max_results=5)
 
         mock_stealthy.assert_called_once()
         mock_stealthy_instance.fetch.assert_called_once()
 
-    @patch('app.publix.search_products.StealthyFetcher')
-    @patch('app.publix.search_products.Fetcher')
+    @patch('app.publix.client.StealthyFetcher')
+    @patch('app.publix.client.Fetcher')
     def test_falls_back_when_content_validation_fails(self, mock_fetcher, mock_stealthy):
         mock_page = MagicMock()
         mock_page.status = 200
@@ -94,13 +96,14 @@ class TestPublixFetcherFirstStrategy:
         mock_stealthy_instance.fetch.return_value = mock_stealthy_page
         mock_stealthy.return_value = mock_stealthy_instance
 
-        results = search("milk", max_results=5)
+        client = PublixClient()
+        results = client._fetch_products("milk", max_results=5)
 
         assert mock_fetcher.get.call_count == 2
         mock_stealthy.assert_called_once()
 
-    @patch('app.publix.search_products.StealthyFetcher')
-    @patch('app.publix.search_products.Fetcher')
+    @patch('app.publix.client.StealthyFetcher')
+    @patch('app.publix.client.Fetcher')
     def test_falls_back_when_store_context_missing(self, mock_fetcher, mock_stealthy):
         mock_page = MagicMock()
         mock_page.status = 200
@@ -125,13 +128,14 @@ class TestPublixFetcherFirstStrategy:
         mock_stealthy_instance.fetch.return_value = mock_stealthy_page
         mock_stealthy.return_value = mock_stealthy_instance
 
-        results = search("milk", location_id="12345", max_results=5)
+        client = PublixClient()
+        results = client._fetch_products("milk", location_id="12345", max_results=5)
 
         assert mock_fetcher.get.call_count == 2
         mock_stealthy.assert_called_once()
 
-    @patch('app.publix.search_products.StealthyFetcher')
-    @patch('app.publix.search_products.Fetcher')
+    @patch('app.publix.client.StealthyFetcher')
+    @patch('app.publix.client.Fetcher')
     def test_handles_redirect_in_fallback_path(self, mock_fetcher, mock_stealthy):
         mock_fail_page = MagicMock()
         mock_fail_page.status = 200
@@ -150,15 +154,16 @@ class TestPublixFetcherFirstStrategy:
         mock_stealthy_instance.fetch.return_value = mock_stealthy_page
         mock_stealthy.return_value = mock_stealthy_instance
 
-        results = search("milk", max_results=5)
+        client = PublixClient()
+        results = client._fetch_products("milk", max_results=5)
 
         call_args = mock_stealthy_instance.fetch.call_args
         fetched_url = call_args[0][0]
         assert 'searchtermredirect=milk' in fetched_url
         assert 'facet=promoType' in fetched_url
 
-    @patch('app.publix.search_products.StealthyFetcher')
-    @patch('app.publix.search_products.Fetcher')
+    @patch('app.publix.client.StealthyFetcher')
+    @patch('app.publix.client.Fetcher')
     def test_extracts_products_from_fast_path(self, mock_fetcher, mock_stealthy):
         mock_page = MagicMock()
         mock_page.status = 200
@@ -172,7 +177,8 @@ class TestPublixFetcherFirstStrategy:
         '''
         mock_fetcher.get.return_value = mock_page
 
-        results = search("milk", max_results=5)
+        client = PublixClient()
+        results = client._fetch_products("milk", max_results=5)
 
         assert len(results) == 2
         assert results[0]['name'] == 'Organic Milk 1 Gallon'
