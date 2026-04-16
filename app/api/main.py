@@ -1,5 +1,6 @@
 from typing import List, Optional
 import logging
+import asyncio
 from fastapi import FastAPI, Query, HTTPException
 
 from app.models import NormalizedProduct, NormalizedLocation
@@ -153,6 +154,34 @@ def search_walmart(
     except Exception as e:
         logger.exception("Walmart search failed")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/search", response_model=List[NormalizedProduct])
+async def search_all(
+    q: str = Query(..., description="search query"),
+    aldi_location_id: Optional[str] = Query(None, description="aldi store location id"),
+    kroger_location_id: Optional[str] = Query(None, description="kroger store location id"),
+    publix_location_id: Optional[str] = Query(None, description="publix store location id"),
+    walmart_location_id: Optional[str] = Query(None, description="walmart store location id"),
+    max_results: int = Query(5, ge=1, le=50, description="maximum number of results per store")
+):
+    tasks = [
+        asyncio.to_thread(search_aldi, q, aldi_location_id, max_results),
+        asyncio.to_thread(search_kroger, q, kroger_location_id, max_results),
+        asyncio.to_thread(search_publix, q, publix_location_id, max_results),
+        asyncio.to_thread(search_walmart, q, walmart_location_id, max_results),
+    ]
+    
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    final_results = []
+    for res in results:
+        if isinstance(res, Exception):
+            logger.error(f"Error in unified search: {res}")
+        elif res:
+            final_results.extend(res)
+            
+    return final_results
 
 
 def start():
