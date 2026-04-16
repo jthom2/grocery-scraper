@@ -2,7 +2,7 @@ from typing import List, Optional
 import logging
 from fastapi import FastAPI, Query, HTTPException
 
-from app.models import NormalizedProduct
+from app.models import NormalizedProduct, NormalizedLocation
 from app.aldi.client import AldiClient
 from app.kroger.client import KrogerClient
 from app.publix.client import PublixClient
@@ -25,20 +25,69 @@ publix_client = PublixClient()
 walmart_client = WalmartClient()
 
 
+# --- Store Locators ---
+
+@app.get("/api/v1/aldi/locations", response_model=List[NormalizedLocation])
+def get_aldi_locations(
+    zip_code: str = Query(..., description="zip code to find stores near"),
+    max_results: int = Query(10, ge=1, le=50)
+):
+    try:
+        return aldi_client.get_stores(zip_code, max_results=max_results)
+    except Exception as e:
+        logger.exception("Aldi store lookup failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/kroger/locations", response_model=List[NormalizedLocation])
+def get_kroger_locations(
+    zip_code: str = Query(..., description="zip code to find stores near"),
+    max_results: int = Query(10, ge=1, le=50)
+):
+    try:
+        return kroger_client.get_stores(zip_code, max_results=max_results)
+    except Exception as e:
+        logger.exception("Kroger store lookup failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/publix/locations", response_model=List[NormalizedLocation])
+def get_publix_locations(
+    zip_code: str = Query(..., description="zip code to find stores near"),
+    max_results: int = Query(10, ge=1, le=50)
+):
+    try:
+        return publix_client.get_stores(zip_code, max_results=max_results)
+    except Exception as e:
+        logger.exception("Publix store lookup failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/walmart/locations", response_model=List[NormalizedLocation])
+def get_walmart_locations(
+    zip_code: str = Query(..., description="zip code to find stores near"),
+    max_results: int = Query(10, ge=1, le=50)
+):
+    try:
+        return walmart_client.get_stores(zip_code, max_results=max_results)
+    except Exception as e:
+        logger.exception("Walmart store lookup failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Search Endpoints ---
+
 @app.get("/api/v1/aldi/search", response_model=List[NormalizedProduct])
 def search_aldi(
     q: str = Query(..., description="search query"),
     location_id: Optional[str] = Query(None, description="store location id"),
-    zip_code: Optional[str] = Query(None, description="zip code for location-specific pricing"),
     max_results: int = Query(5, ge=1, le=50, description="maximum number of results")
 ):
     try:
-        # aldi uses zip_code in search_products for cache isolation
         return aldi_client.search_products(
             query=q, 
             location_id=location_id, 
-            max_results=max_results, 
-            zip_code=zip_code
+            max_results=max_results
         )
     except Exception as e:
         logger.exception("Aldi search failed")
@@ -49,23 +98,16 @@ def search_aldi(
 def search_kroger(
     q: str = Query(..., description="search query"),
     location_id: Optional[str] = Query(None, description="store location id"),
-    zip_code: Optional[str] = Query(None, description="zip code to find closest store"),
     max_results: int = Query(5, ge=1, le=50, description="maximum number of results")
 ):
     try:
-        resolved_location_id = location_id
         cookies = None
-        if not resolved_location_id and zip_code:
-            stores = kroger_client.get_stores(zip_code)
-            if stores:
-                resolved_location_id = stores[0]['location_id']
-        
-        if resolved_location_id:
-            cookies = kroger_client._build_cookies(resolved_location_id, zip_code)
+        if location_id:
+            cookies = kroger_client._build_cookies(location_id, None)
 
         return kroger_client.search_products(
             query=q, 
-            location_id=resolved_location_id, 
+            location_id=location_id, 
             max_results=max_results,
             cookies=cookies
         )
@@ -78,19 +120,12 @@ def search_kroger(
 def search_publix(
     q: str = Query(..., description="search query"),
     location_id: Optional[str] = Query(None, description="store location id"),
-    zip_code: Optional[str] = Query(None, description="zip code to find closest store"),
     max_results: int = Query(5, ge=1, le=50, description="maximum number of results")
 ):
     try:
-        resolved_location_id = location_id
-        if not resolved_location_id and zip_code:
-            stores = publix_client.get_stores(zip_code)
-            if stores:
-                resolved_location_id = stores[0]['location_id']
-
         return publix_client.search_products(
             query=q, 
-            location_id=resolved_location_id, 
+            location_id=location_id, 
             max_results=max_results
         )
     except Exception as e:
@@ -102,23 +137,16 @@ def search_publix(
 def search_walmart(
     q: str = Query(..., description="search query"),
     location_id: Optional[str] = Query(None, description="store location id"),
-    zip_code: Optional[str] = Query(None, description="zip code to find closest store"),
     max_results: int = Query(5, ge=1, le=50, description="maximum number of results")
 ):
     try:
-        resolved_location_id = location_id
         cookies = None
-        if not resolved_location_id and zip_code:
-            stores = walmart_client.get_stores(zip_code)
-            if stores:
-                resolved_location_id = stores[0]['location_id']
-
-        if resolved_location_id:
-            cookies = walmart_client._build_cookies(resolved_location_id, zip_code)
+        if location_id:
+            cookies = walmart_client._build_cookies(location_id, None)
 
         return walmart_client.search_products(
             query=q, 
-            location_id=resolved_location_id, 
+            location_id=location_id, 
             max_results=max_results,
             cookies=cookies
         )
