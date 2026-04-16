@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 from unittest.mock import MagicMock
 
-from app.kroger.search_products import search
+from app.kroger.client import KrogerClient
 from tests.performance.assertions import (
     assert_latency_under,
     assert_no_regression,
@@ -47,7 +47,7 @@ class TestKrogerStealthyFetcherPerformance:
 
     # browser overhead is ~800-1200ms, this establishes reference
     @pytest.mark.perf_baseline
-    @patch("app.kroger.search_products.StealthyFetcher")
+    @patch("app.kroger.client.StealthyFetcher")
     def test_kroger_stealthy_search_baseline(
         self,
         mock_stealthy_fetcher,
@@ -63,7 +63,7 @@ class TestKrogerStealthyFetcherPerformance:
             import time
             time.sleep(0.1)  # Stabilize baseline
             try:
-                results = search("cheese", max_results=5)
+                results = KrogerClient()._fetch_products("cheese", max_results=5)
             except Exception:
                 # May fail due to mocking, but we measure latency
                 pass
@@ -196,7 +196,7 @@ class TestKrogerSessionManagement:
 
 # blocks pr if kroger search got slower
 class TestKrogerSearchRegressions:
-    @patch("app.kroger.search_products.StealthyFetcher")
+    @patch("app.kroger.client.StealthyFetcher")
     def test_kroger_no_regression_stealthy_latency(
         self,
         mock_stealthy_fetcher,
@@ -216,7 +216,7 @@ class TestKrogerSearchRegressions:
             import time
             time.sleep(0.1)  # Stabilize measurement
             try:
-                search("cheese", max_results=5)
+                KrogerClient()._fetch_products("cheese", max_results=5)
             except Exception:
                 # May fail due to mocking, but we measure latency
                 pass

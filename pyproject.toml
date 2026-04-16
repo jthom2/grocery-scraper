@@ -21,10 +21,10 @@ dependencies = [
 ]
 
 [project.scripts]
-walmart-search = "app.walmart.store_search:main"
-kroger-search = "app.kroger.store_search:main"
-publix-search = "app.publix.store_search:main"
-aldi-search = "app.aldi.store_search:main"
+walmart-search = "app.walmart.client:main"
+kroger-search = "app.kroger.client:main"
+publix-search = "app.publix.client:main"
+aldi-search = "app.aldi.client:main"
 
 [project.optional-dependencies]
 test = [
@@ -46,7 +46,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["app"]
-omit = ["app/*/store_search.py"]
+omit = []
 
 [tool.coverage.report]
 exclude_lines = [

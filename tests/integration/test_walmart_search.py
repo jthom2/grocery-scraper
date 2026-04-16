@@ -3,7 +3,7 @@ import orjson
 
 import pytest
 
-from app.walmart.search_products import search
+from app.walmart.client import WalmartClient
 
 
 # verifies search extraction and normalization logic
@@ -41,7 +41,8 @@ class TestWalmartSearch:
         html = self._create_next_data_html(items)
         mock_fetcher.return_value = mock_page_factory(body=html)
 
-        results = search("test query")
+        client = WalmartClient()
+        results = client._fetch_products("test query")
 
         assert len(results) == 1
         product = results[0]
@@ -68,7 +69,8 @@ class TestWalmartSearch:
         html = self._create_next_data_html(items)
         mock_fetcher.return_value = mock_page_factory(body=html)
 
-        results = search("test query")
+        client = WalmartClient()
+        results = client._fetch_products("test query")
 
         assert len(results) == 1
         assert results[0]["product_id"] == "123456"
@@ -95,7 +97,8 @@ class TestWalmartSearch:
         html = self._create_next_data_html(items)
         mock_fetcher.return_value = mock_page_factory(body=html)
 
-        results = search("test query")
+        client = WalmartClient()
+        results = client._fetch_products("test query")
 
         assert len(results) == 1
         assert results[0]["name"] == "Valid Product"
@@ -109,7 +112,8 @@ class TestWalmartSearch:
         html = self._create_next_data_html(items)
         mock_fetcher.return_value = mock_page_factory(body=html)
 
-        results = search("test", max_results=3)
+        client = WalmartClient()
+        results = client._fetch_products("test", max_results=3)
 
         assert len(results) == 3
 
@@ -133,7 +137,8 @@ class TestWalmartSearch:
         mock_fetcher.return_value = mock_page_factory(body=html)
 
         cookies = {"assortmentStoreId": "123"}
-        results = search("test", cookies=cookies)
+        client = WalmartClient()
+        results = client._fetch_products("test", cookies=cookies)
 
         assert len(results) == 1
         assert results[0]["product_id"] == "available"
@@ -162,7 +167,8 @@ class TestWalmartSearch:
         html = self._create_next_data_html(items)
         mock_fetcher.return_value = mock_page_factory(body=html)
 
-        results = search("test")
+        client = WalmartClient()
+        results = client._fetch_products("test")
 
         product = results[0]
         assert product["product_id"] == "PROD123"
@@ -190,7 +196,8 @@ class TestWalmartSearch:
         html = self._create_next_data_html(items)
         mock_fetcher.return_value = mock_page_factory(body=html)
 
-        results = search("test")
+        client = WalmartClient()
+        results = client._fetch_products("test")
 
         assert results[0]["image_url"] == "https://example.com/image.jpg"
 
@@ -199,6 +206,7 @@ class TestWalmartSearch:
         html = self._create_next_data_html([])
         mock_fetcher.return_value = mock_page_factory(body=html)
 
-        results = search("test")
+        client = WalmartClient()
+        results = client._fetch_products("test")
 
         assert results == []

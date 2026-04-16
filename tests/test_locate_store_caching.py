@@ -7,10 +7,10 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from app.walmart import locate_store as walmart_locate
-from app.kroger import locate_store as kroger_locate
-from app.publix import locate_store as publix_locate
-from app.aldi import locate_store as aldi_locate
+from app.walmart.client import WalmartClient
+from app.kroger.client import KrogerClient
+from app.publix.client import PublixClient
+from app.aldi.client import AldiClient
 
 
 @pytest.mark.integration
@@ -31,9 +31,9 @@ class TestWalmartLocateCaching:
         store_cache.set = lambda retailer, zip_code, stores, ttl_hours=1: self.cache_data.update({f"{retailer}:{zip_code}": stores})
 
 
-    @patch('app.walmart.locate_store.zip2loc.get_city_state')
-    @patch('app.walmart.locate_store.get_next_data.get_next_data')
-    @patch('app.walmart.locate_store.fetcher.fetch')
+    @patch('app.walmart.client.zip2loc.get_city_state')
+    @patch('app.walmart.client.get_next_data.get_next_data')
+    @patch('app.walmart.client.fetcher.fetch')
     def test_walmart_cache_hit_on_second_call(self, mock_fetch, mock_get_next_data, mock_zip2loc):
         # second call with same ZIP should use cache, not fetch
         mock_zip2loc.return_value = ('Seattle', 'WA')
@@ -69,13 +69,13 @@ class TestWalmartLocateCaching:
         mock_fetch.return_value = MagicMock()
 
         # First call
-        stores1 = walmart_locate.find_stores('98101')
+        stores1 = WalmartClient().get_stores('98101')
         call_count_after_first = mock_fetch.call_count
         assert len(stores1) > 0, "First call should return stores"
 
         # Second call with same ZIP
         start = time.time()
-        stores2 = walmart_locate.find_stores('98101')
+        stores2 = WalmartClient().get_stores('98101')
         elapsed = time.time() - start
         call_count_after_second = mock_fetch.call_count
 
@@ -103,7 +103,7 @@ class TestKrogerLocateCaching:
         store_cache.set = lambda retailer, zip_code, stores, ttl_hours=1: self.cache_data.update({f"{retailer}:{zip_code}": stores})
 
 
-    @patch('app.kroger.locate_store.fetcher.fetch')
+    @patch('app.kroger.client.fetcher.fetch')
     def test_kroger_cache_hit_on_second_call(self, mock_fetch):
         # second call with same ZIP should use cache
         mock_response = MagicMock()
@@ -131,13 +131,13 @@ class TestKrogerLocateCaching:
         mock_fetch.return_value = mock_response
 
         # First call
-        stores1 = kroger_locate.get_stores('98101')
+        stores1 = KrogerClient().get_stores('98101')
         call_count_after_first = mock_fetch.call_count
         assert len(stores1) > 0, "First call should return stores"
 
         # Second call with same ZIP
         start = time.time()
-        stores2 = kroger_locate.get_stores('98101')
+        stores2 = KrogerClient().get_stores('98101')
         elapsed = time.time() - start
         call_count_after_second = mock_fetch.call_count
 
@@ -165,7 +165,7 @@ class TestPublixLocateCaching:
         store_cache.set = lambda retailer, zip_code, stores, ttl_hours=1: self.cache_data.update({f"{retailer}:{zip_code}": stores})
 
 
-    @patch('app.publix.locate_store.fetcher.fetch')
+    @patch('app.publix.client.fetcher.fetch')
     def test_publix_cache_hit_on_second_call(self, mock_fetch):
         # second call with same ZIP should use cache
         mock_response = MagicMock()
@@ -186,13 +186,13 @@ class TestPublixLocateCaching:
         mock_fetch.return_value = mock_response
 
         # First call
-        stores1 = publix_locate.fetch_stores('98101')
+        stores1 = PublixClient().get_stores('98101')
         call_count_after_first = mock_fetch.call_count
         assert len(stores1) > 0, "First call should return stores"
 
         # Second call with same ZIP
         start = time.time()
-        stores2 = publix_locate.fetch_stores('98101')
+        stores2 = PublixClient().get_stores('98101')
         elapsed = time.time() - start
         call_count_after_second = mock_fetch.call_count
 
@@ -220,8 +220,8 @@ class TestAldiLocateCaching:
         store_cache.set = lambda retailer, zip_code, stores, ttl_hours=1: self.cache_data.update({f"{retailer}:{zip_code}": stores})
 
 
-    @patch('app.aldi.locate_store._fetch_shops_direct')
-    @patch('app.aldi.locate_store._prime_session')
+    @patch('app.aldi.client._fetch_shops_direct')
+    @patch('app.aldi.client._prime_session')
     def test_aldi_cache_hit_on_second_call(self, mock_prime_session, mock_fetch_shops):
         # second call with same ZIP should use cache
         # Mock the shops response from direct fetch
@@ -237,13 +237,13 @@ class TestAldiLocateCaching:
         }]
 
         # First call
-        stores1 = aldi_locate.get_stores('98101')
+        stores1 = AldiClient().get_stores('98101')
         fetch_call_count_after_first = mock_fetch_shops.call_count
         assert len(stores1) > 0, "First call should return stores"
 
         # Second call with same ZIP
         start = time.time()
-        stores2 = aldi_locate.get_stores('98101')
+        stores2 = AldiClient().get_stores('98101')
         elapsed = time.time() - start
         fetch_call_count_after_second = mock_fetch_shops.call_count
 

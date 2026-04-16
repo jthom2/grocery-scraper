@@ -108,7 +108,7 @@ def mock_stealthy_fetcher():
 @pytest.fixture
 def mock_requests_get():
     from app.utils.zip2loc import _ZIP_CACHE, _fetch_from_api
-    from app.aldi.search_products import get_coordinates
+    from app.aldi.client import get_coordinates
 
     _ZIP_CACHE.clear()  # clear TTL cache
     _fetch_from_api.cache_clear()  # clear lru_cache on the fetch function
