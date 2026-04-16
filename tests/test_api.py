@@ -77,3 +77,24 @@ def test_search_publix_error(mock_publix):
     response = client.get("/api/v1/publix/search?q=eggs")
     assert response.status_code == 500
     assert "Scraper error" in response.json()["detail"]
+
+
+@patch("app.api.main.search_walmart")
+@patch("app.api.main.search_publix")
+@patch("app.api.main.search_kroger")
+@patch("app.api.main.search_aldi")
+def test_search_all(mock_aldi, mock_kroger, mock_publix, mock_walmart):
+    mock_aldi.return_value = [{"retailer": "aldi", "name": "Milk", "price": 2.50}]
+    mock_kroger.return_value = [{"retailer": "kroger", "name": "Milk", "price": 3.00}]
+    mock_publix.return_value = [{"retailer": "publix", "name": "Milk", "price": 3.50}]
+    mock_walmart.return_value = [{"retailer": "walmart", "name": "Milk", "price": 2.00}]
+    
+    response = client.get("/api/v1/search?q=milk&aldi_location_id=1&kroger_location_id=2")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 4
+    
+    mock_aldi.assert_called_once_with("milk", "1", 1)
+    mock_kroger.assert_called_once_with("milk", "2", 1)
+    mock_publix.assert_called_once_with("milk", None, 1)
+    mock_walmart.assert_called_once_with("milk", None, 1)
