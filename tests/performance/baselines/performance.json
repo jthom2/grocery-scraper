@@ -1,26 +1,26 @@
 {
   "aldi_cold_start_latency": {
     "name": "aldi_cold_start_latency",
-    "duration_ms": 1.0036250023404136,
+    "duration_ms": 1.3817499857395887,
     "cache_hits": 0,
     "cache_misses": 0,
     "total_requests": 1,
-    "timestamp": "2026-04-15 19:05:42"
+    "timestamp": "2026-04-16 12:54:50"
   },
   "kroger_stealthy_search_latency": {
     "name": "kroger_stealthy_search_latency",
-    "duration_ms": 106.16254100750666,
+    "duration_ms": 104.38879200955853,
     "cache_hits": 0,
     "cache_misses": 0,
     "total_requests": 1,
-    "timestamp": "2026-04-15 19:05:43"
+    "timestamp": "2026-04-16 12:54:50"
   },
   "walmart_search_latency": {
     "name": "walmart_search_latency",
-    "duration_ms": 0.5158340063644573,
+    "duration_ms": 0.4893329896731302,
     "cache_hits": 0,
     "cache_misses": 0,
     "total_requests": 1,
-    "timestamp": "2026-04-15 19:05:44"
+    "timestamp": "2026-04-16 12:54:52"
   }
 }
