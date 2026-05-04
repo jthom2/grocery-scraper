@@ -28,3 +28,5 @@ MANIFEST
 test/
 /graphify-out
 /.*
+
+tests/performance/baselines/performance.json

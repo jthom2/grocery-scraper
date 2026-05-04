@@ -19,13 +19,18 @@ dependencies = [
     "redis>=7.4.0",
     "requests>=2.33.1",
     "scrapling[all]>=0.4.3",
+    "fastapi[standard]>=0.110.0",
 ]
 
 [project.scripts]
 walmart-search = "app.walmart.client:main"
 kroger-search = "app.kroger.client:main"
+kroger-batch = "app.kroger.export:main"
 publix-search = "app.publix.client:main"
+publix-batch = "app.publix.export:main"
 aldi-search = "app.aldi.client:main"
+aldi-batch = "app.aldi.export:main"
+start-api = "app.api.main:start"
 
 [project.optional-dependencies]
 test = [

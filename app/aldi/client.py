@@ -267,8 +267,7 @@ def fetch_items(item_ids, shop_id, zip_code, cookies, referer):
 
 
 # establishes session, fetches credentials, and builds the complete search context needed for product queries
-def build_search_context(query, location_id=None, zip_code=None):
-    search_page = fetcher.fetch(SEARCH_URL, params={'k': query})
+def build_search_context_from_page(search_page, location_id=None, zip_code=None):
     cookies = search_page.cookies
     referer = str(search_page.url)
 
@@ -303,6 +302,12 @@ def build_search_context(query, location_id=None, zip_code=None):
     }
 
 
+# establishes session, fetches credentials, and builds the complete search context needed for product queries
+def build_search_context(query, location_id=None, zip_code=None):
+    search_page = fetcher.fetch(SEARCH_URL, params={'k': query})
+    return build_search_context_from_page(search_page, location_id=location_id, zip_code=zip_code)
+
+
 # processes a single item and adds it to results if valid
 def _process_item(item, location_id, results, max_results):
     if not item.get('name'):
@@ -333,6 +338,12 @@ def _process_items_batch(item_ids, search_context, max_results):
             search_context['cookies'],
             search_context['referer'],
         )
+
+    if len(batches) == 1:
+        for item in fetch_batch(batches[0]):
+            if _process_item(item, search_context['location_id'], results, max_results):
+                return results
+        return results
     
     # fetch all batches concurrently with 4 workers
     with ThreadPoolExecutor(max_workers=4) as executor:
@@ -421,7 +432,7 @@ class AldiClient(BaseStoreClient):
         if not resolved_zip:
             return []
 
-        search_context = build_search_context(query, location_id=location_id, zip_code=zip_code)
+        search_context = build_search_context_from_page(initial_page, location_id=location_id, zip_code=resolved_zip)
         if not search_context:
             return []
 
@@ -466,7 +477,8 @@ class AldiClient(BaseStoreClient):
 
 
 def main():
-    AldiClient().run_search_cli()
+    from app.cli import run_interactive_search
+    run_interactive_search(AldiClient())
 
 
 if __name__ == "__main__":

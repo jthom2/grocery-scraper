@@ -6,7 +6,7 @@ import pytest
 class TestKrogerPriceExtraction:
     @pytest.fixture
     def extract_fn(self):
-        from app.kroger.client import extract_numeric_price
+        from app.kroger.parser import extract_numeric_price
 
         return extract_numeric_price
 
@@ -110,7 +110,7 @@ class TestPublixPriceExtraction:
 class TestPriceEdgeCases:
     # commas in prices are rare but can appear
     def test_kroger_handles_comma_in_price(self):
-        from app.kroger.client import extract_numeric_price
+        from app.kroger.parser import extract_numeric_price
 
         result = extract_numeric_price("$1,234.56")
         # Note: current implementation may not handle commas correctly
@@ -127,14 +127,14 @@ class TestPriceEdgeCases:
 
     # api sometimes returns numeric type instead of string
     def test_kroger_integer_price(self):
-        from app.kroger.client import extract_numeric_price
+        from app.kroger.parser import extract_numeric_price
 
         result = extract_numeric_price(5)
         assert result == 5.0
 
     # api sometimes returns numeric type instead of string
     def test_kroger_float_input(self):
-        from app.kroger.client import extract_numeric_price
+        from app.kroger.parser import extract_numeric_price
 
         result = extract_numeric_price(4.99)
         assert result == 4.99

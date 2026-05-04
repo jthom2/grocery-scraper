@@ -3,8 +3,9 @@ from urllib.parse import quote
 from app.models import normalize_location, normalize_product
 from app.utils import zip2loc, get_next_data, fetcher
 from app.utils.store_client import BaseStoreClient
-from app.utils import build_cookies
+from app.walmart import build_cookies
 from app.walmart.constants import STORE_DIRECTORY_URL, REFERER, SEARCH_URL, BASE_URL
+from app.walmart.parser import normalize_walmart_product
 
 
 class WalmartClient(BaseStoreClient):
@@ -13,10 +14,7 @@ class WalmartClient(BaseStoreClient):
     def retailer_name(self) -> str:
         return "walmart"
 
-    def _prompt_zip(self) -> str:
-        return input("Enter zip code: ")
-
-    def _build_cookies(self, location_id, zip_code):
+    def build_cookies(self, location_id, zip_code):
         return build_cookies.build_location_cookies(location_id, zip_code)
 
     # converts zip code to city/state and fetches nearby walmart store locations
@@ -108,42 +106,15 @@ class WalmartClient(BaseStoreClient):
                     if not is_in_store:
                         continue
 
-                _get = item.get
-                rating_data = _get('rating') or {}
-                price_info = _get('priceInfo') or {}
-                availability = _get('availabilityStatusV2') or {}
-                image = _get('image')
-                if isinstance(image, dict):
-                    image_url = image.get('url')
-                else:
-                    image_url = str(image) if image else None
-
-                results.append(normalize_product({
-                    'retailer': 'walmart',
-                    'product_id': _get('usItemId'),
-                    'location_id': str(location_id) if location_id else cookie_store_id,
-                    'name': name,
-                    'brand': _get('brand'),
-                    'size': _get('salesUnit'),
-                    'price': _get('price'),
-                    'price_display': price_info.get('linePriceDisplay'),
-                    'unit_price': price_info.get('unitPrice'),
-                    'was_price': price_info.get('wasPrice') or None,
-                    'rating': rating_data.get('averageRating'),
-                    'reviews': rating_data.get('numberOfReviews'),
-                    'image_url': image_url,
-                    'in_stock': availability.get('value') == 'IN_STOCK',
-                    'availability': availability.get('display'),
-                    'url': f"{BASE_URL}{_get('canonicalUrl', '')}",
-                    'description': _get('shortDescription', ''),
-                }))
+                results.append(normalize_walmart_product(item, location_id, cookie_store_id))
                 result_count += 1
 
         return results
 
 
 def main():
-    WalmartClient().run_search_cli()
+    from app.cli import run_interactive_search
+    run_interactive_search(WalmartClient())
 
 
 if __name__ == "__main__":
