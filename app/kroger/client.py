@@ -72,6 +72,38 @@ def _dict_cookies_to_playwright(cookie_dict, base_url=BASE_URL):
     ]
 
 
+def normalize_kroger_product(product, location_id=None):
+    item = product.get('item') or {}
+    price_data = product.get('price', {}).get('storePrices', {})
+    regular = price_data.get('regular', {})
+    promo = price_data.get('promo')
+    inventory = product.get('inventory', {})
+    ratings = item.get('ratingsAndReviewsAggregate', {})
+
+    locations = inventory.get('locations', [])
+    stock_level = locations[0].get('stockLevel') if locations else None
+
+    return normalize_product({
+        'retailer': 'kroger',
+        'product_id': product.get('id'),
+        'location_id': str(location_id) if location_id else None,
+        'name': item.get('description'),
+        'brand': (item.get('brand') or {}).get('name'),
+        'size': item.get('customerFacingSize'),
+        'price': extract_numeric_price(regular.get('price')),
+        'price_display': regular.get('defaultDescription'),
+        'unit_price': regular.get('equivalizedUnitPriceString'),
+        'promo_price': promo.get('defaultDescription') if promo else None,
+        'rating': ratings.get('averageRating'),
+        'reviews': ratings.get('numberOfReviews'),
+        'image_url': get_front_image(item.get('images')),
+        'in_stock': stock_level in ('HIGH', 'LOW', 'MEDIUM') if stock_level else None,
+        'stock_level': stock_level,
+        'availability': stock_level,
+        'url': f"{BASE_URL}/p/{item.get('seoDescription')}/{product.get('id')}",
+    })
+
+
 class KrogerClient(BaseStoreClient):
 
     @property
@@ -164,35 +196,7 @@ class KrogerClient(BaseStoreClient):
 
         results = []
         for product in products_data[:max_results]:
-            item = product.get('item') or {}
-            price_data = product.get('price', {}).get('storePrices', {})
-            regular = price_data.get('regular', {})
-            promo = price_data.get('promo')
-            inventory = product.get('inventory', {})
-            ratings = item.get('ratingsAndReviewsAggregate', {})
-
-            locations = inventory.get('locations', [])
-            stock_level = locations[0].get('stockLevel') if locations else None
-
-            results.append(normalize_product({
-                'retailer': 'kroger',
-                'product_id': product.get('id'),
-                'location_id': str(location_id) if location_id else None,
-                'name': item.get('description'),
-                'brand': (item.get('brand') or {}).get('name'),
-                'size': item.get('customerFacingSize'),
-                'price': extract_numeric_price(regular.get('price')),
-                'price_display': regular.get('defaultDescription'),
-                'unit_price': regular.get('equivalizedUnitPriceString'),
-                'promo_price': promo.get('defaultDescription') if promo else None,
-                'rating': ratings.get('averageRating'),
-                'reviews': ratings.get('numberOfReviews'),
-                'image_url': get_front_image(item.get('images')),
-                'in_stock': stock_level in ('HIGH', 'LOW', 'MEDIUM') if stock_level else None,
-                'stock_level': stock_level,
-                'availability': stock_level,
-                'url': f"{BASE_URL}/p/{item.get('seoDescription')}/{product.get('id')}",
-            }))
+            results.append(normalize_kroger_product(product, location_id=location_id))
 
         return results
 

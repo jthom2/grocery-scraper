@@ -1,19 +1,14 @@
 import json
 import logging
 import os
+from app.common_queries import COMMON_GROCERY_SEARCHES
 from app.walmart.spider import run_walmart_batch
 
 # configure logging to see progress
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 def main():
-    queries = [
-        "milk", "eggs", "bread", "bananas", "chicken breast", 
-        "apples", "cheese", "onions", "potatoes", "butter", 
-        "tomatoes", "ground beef", "yogurt", "avocados", "coffee", 
-        "cereal", "pasta", "rice", "orange juice", "lettuce", 
-        "frozen pizza", "water", "snacks", "paper towels", "toilet paper"
-    ]
+    queries = list(COMMON_GROCERY_SEARCHES)
     location_id = "4673"
     zip_code = "36830"
     
