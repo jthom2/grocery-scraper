@@ -29,6 +29,7 @@ kroger-batch = "app.kroger.export:main"
 publix-search = "app.publix.client:main"
 publix-batch = "app.publix.export:main"
 aldi-search = "app.aldi.client:main"
+aldi-batch = "app.aldi.export:main"
 start-api = "app.api.main:start"
 
 [project.optional-dependencies]
