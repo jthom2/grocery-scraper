@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.errors import ScraperError
 from app.api.exceptions import scraper_exception_handler, generic_exception_handler
-from app.api.routers import aldi, kroger, publix, walmart, unified
+from app.api.routers import aldi, kroger, matching, publix, walmart, unified
 
 # setup logging
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +38,7 @@ app.include_router(kroger.router, prefix="/api/v1/kroger", tags=["kroger"])
 app.include_router(publix.router, prefix="/api/v1/publix", tags=["publix"])
 app.include_router(walmart.router, prefix="/api/v1/walmart", tags=["walmart"])
 app.include_router(unified.router, prefix="/api/v1", tags=["unified"])
+app.include_router(matching.router, prefix="/api/v1/match", tags=["matching"])
 
 # system endpoints
 
