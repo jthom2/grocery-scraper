@@ -27,6 +27,7 @@ walmart-search = "app.walmart.client:main"
 kroger-search = "app.kroger.client:main"
 kroger-batch = "app.kroger.export:main"
 publix-search = "app.publix.client:main"
+publix-batch = "app.publix.export:main"
 aldi-search = "app.aldi.client:main"
 start-api = "app.api.main:start"
 
