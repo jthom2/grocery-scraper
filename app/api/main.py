@@ -1,4 +1,5 @@
 import logging
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -48,7 +49,16 @@ async def health_check():
 
 def start():
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    host = os.getenv("API_HOST", "0.0.0.0")
+    port = int(os.getenv("API_PORT", "8000"))
+    browser_host = "127.0.0.1" if host == "0.0.0.0" else host
+
+    logger.info("Starting Grocery Scraper API on %s:%s", host, port)
+    logger.info("Swagger UI: http://%s:%s/docs", browser_host, port)
+    logger.info("OpenAPI JSON: http://%s:%s/openapi.json", browser_host, port)
+
+    uvicorn.run(app, host=host, port=port)
 
 if __name__ == "__main__":
     start()
