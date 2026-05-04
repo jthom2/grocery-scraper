@@ -5,7 +5,7 @@ from scrapling.fetchers import AsyncStealthySession
 from scrapling.spiders import Request, Response, Spider
 
 from app.errors import ScraperParsingError
-from app.publix.client import extract_products
+from app.publix.parser import extract_products
 from app.publix.constants import BASE_URL, REFERER, SEARCH_URL
 
 logger = logging.getLogger(__name__)

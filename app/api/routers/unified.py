@@ -33,14 +33,14 @@ async def search_all(
         return aldi_client.search_products(q, aldi_location_id, max_results=1)
 
     def fetch_kroger():
-        cookies = kroger_client._build_cookies(kroger_location_id, None) if kroger_location_id else None
+        cookies = kroger_client.build_cookies(kroger_location_id, None) if kroger_location_id else None
         return kroger_client.search_products(q, kroger_location_id, max_results=1, cookies=cookies)
 
     def fetch_publix():
         return publix_client.search_products(q, publix_location_id, max_results=1)
 
     def fetch_walmart():
-        cookies = walmart_client._build_cookies(walmart_location_id, None) if walmart_location_id else None
+        cookies = walmart_client.build_cookies(walmart_location_id, None) if walmart_location_id else None
         return walmart_client.search_products(q, walmart_location_id, max_results=1, cookies=cookies)
 
     tasks = [

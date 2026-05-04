@@ -477,7 +477,8 @@ class AldiClient(BaseStoreClient):
 
 
 def main():
-    AldiClient().run_search_cli()
+    from app.cli import run_interactive_search
+    run_interactive_search(AldiClient())
 
 
 if __name__ == "__main__":

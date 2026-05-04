@@ -3,7 +3,8 @@ import random
 import asyncio
 from scrapling.spiders import Spider, Response, Request
 from app.models import normalize_product
-from app.utils import build_cookies, get_next_data
+from app.utils import get_next_data
+from app.walmart import build_cookies
 from app.walmart.constants import SEARCH_URL, REFERER
 from app.errors import ScraperBlockedError, ScraperNetworkError
 

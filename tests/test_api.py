@@ -68,18 +68,17 @@ def test_search_aldi(mock_aldi):
     assert response.status_code == 200
     assert response.json()[0]["name"] == "Milk"
     mock_aldi.search_products.assert_called_once_with(
-        query="milk", location_id=None, max_results=5
+        query="milk", location_id=None, max_results=5, cookies=None
     )
 
-
 def test_search_kroger_with_location(mock_kroger):
-    mock_kroger._build_cookies.return_value = {"k": "v"}
+    mock_kroger.build_cookies.return_value = {"k": "v"}
     mock_kroger.search_products.return_value = []
     
     response = client.get("/api/v1/kroger/search?q=bread&location_id=123")
     assert response.status_code == 200
     
-    mock_kroger._build_cookies.assert_called_once_with("123", None)
+    mock_kroger.build_cookies.assert_called_once_with("123", "")
     mock_kroger.search_products.assert_called_once_with(
         query="bread", location_id="123", max_results=5, cookies={"k": "v"}
     )
@@ -87,23 +86,24 @@ def test_search_kroger_with_location(mock_kroger):
 
 def test_search_publix_with_location(mock_publix):
     mock_publix.search_products.return_value = []
+    mock_publix.build_cookies.return_value = None
     
     response = client.get("/api/v1/publix/search?q=eggs&location_id=456")
     assert response.status_code == 200
     
     mock_publix.search_products.assert_called_once_with(
-        query="eggs", location_id="456", max_results=5
+        query="eggs", location_id="456", max_results=5, cookies=None
     )
 
 
 def test_search_walmart_with_location(mock_walmart):
-    mock_walmart._build_cookies.return_value = {"w": "v"}
+    mock_walmart.build_cookies.return_value = {"w": "v"}
     mock_walmart.search_products.return_value = []
     
     response = client.get("/api/v1/walmart/search?q=butter&location_id=789")
     assert response.status_code == 200
     
-    mock_walmart._build_cookies.assert_called_once_with("789", None)
+    mock_walmart.build_cookies.assert_called_once_with("789", "")
     mock_walmart.search_products.assert_called_once_with(
         query="butter", location_id="789", max_results=5, cookies={"w": "v"}
     )
@@ -125,8 +125,8 @@ def test_search_all(mock_aldi, mock_kroger, mock_publix, mock_walmart):
     mock_walmart.search_products.return_value = [{"retailer": "walmart", "name": "Milk", "price": 2.00}]
     
     # ensure kroger/walmart cookie building is mocked if needed (they are called inside unified router)
-    mock_kroger._build_cookies.return_value = {}
-    mock_walmart._build_cookies.return_value = {}
+    mock_kroger.build_cookies.return_value = {}
+    mock_walmart.build_cookies.return_value = {}
 
     response = client.get("/api/v1/search?q=milk&aldi_location_id=1&kroger_location_id=2")
     assert response.status_code == 200

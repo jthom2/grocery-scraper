@@ -6,7 +6,7 @@ from urllib.parse import unquote
 
 import pytest
 
-from app.utils.build_cookies import build_location_cookies
+from app.walmart.build_cookies import build_location_cookies
 
 
 # location cookies enable store-specific product availability

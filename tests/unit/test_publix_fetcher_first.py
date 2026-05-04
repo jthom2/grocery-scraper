@@ -2,7 +2,8 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from app.publix.client import PublixClient, _has_product_content
+from app.publix.client import PublixClient
+from app.publix.parser import has_product_content as _has_product_content
 
 
 # validates content detection to decide fast vs slow path

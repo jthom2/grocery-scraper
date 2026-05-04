@@ -5,13 +5,13 @@ from scrapling.fetchers import AsyncStealthySession
 from scrapling.spiders import Request, Response, Spider
 
 from app.errors import ScraperBlockedError, ScraperParsingError
-from app.kroger.client import (
-    _dict_cookies_to_playwright,
+from app.kroger.parser import (
+    dict_cookies_to_playwright as _dict_cookies_to_playwright,
     extract_initial_state,
     normalize_kroger_product,
 )
 from app.kroger.constants import REFERER, SEARCH_URL
-from app.utils import build_kroger_cookies
+from app.kroger import build_cookies as build_kroger_cookies
 
 logger = logging.getLogger(__name__)
 
