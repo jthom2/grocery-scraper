@@ -36,9 +36,9 @@ class WalmartSpider(Spider):
     name = "walmart_batch_spider"
     allowed_domains = {"walmart.com", "www.walmart.com"}
 
-    concurrent_requests = 3
+    concurrent_requests = 1
     concurrent_requests_per_domain = 1
-    download_delay = 2.0
+    download_delay = 6.0
     max_blocked_retries = 3
 
     def __init__(
