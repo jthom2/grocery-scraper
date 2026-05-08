@@ -107,6 +107,7 @@ class KrogerClient(BaseStoreClient):
             url,
             cookies=cookies,
             headless=True,
+            real_chrome=True,
             solve_cloudflare=False,
             google_search=False,
             extra_headers={'referer': REFERER},

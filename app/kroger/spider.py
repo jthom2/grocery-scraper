@@ -43,7 +43,7 @@ class KrogerSpider(Spider):
                 disable_resources=False,
                 network_idle=False,
                 solve_cloudflare=False,
-                real_chrome=False,
+                real_chrome=True,
                 hide_canvas=True,
                 block_webrtc=True,
                 google_search=False,
@@ -71,6 +71,9 @@ class KrogerSpider(Spider):
 
         response_url = str(response.url)
         response_text = getattr(response, "text", None) or getattr(response, "body", "") or ""
+        if isinstance(response_text, bytes):
+            response_text = response_text.decode('utf-8', errors='ignore')
+
         if "/blocked" in response_url or "Access Denied" in response_text:
             return True
 
