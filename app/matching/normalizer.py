@@ -33,7 +33,7 @@ def tokenize(text: str | None) -> list[str]:
 
 # categories that should be checked before produce (which has broad triggers)
 _CATEGORY_PRIORITY = [
-    "milk", "eggs", "bread", "butter", "cheese",
+    "cheese", "milk", "eggs", "bread", "butter",
     "yogurt", "juice", "coffee",
     "pasta", "rice",
     "chicken", "beef", "pork",
@@ -94,7 +94,11 @@ def _milk_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
         "organic": "organic" in token_set,
         "lactose_free": _phrase(text, "lactose free"),
         "flavor": "plain",
+        "form": "fluid",
     }
+
+    if _has_any(token_set, {"dry", "powder", "powdered"}) or _phrase(text, "dry milk"):
+        attrs["form"] = "dry"
 
     if "chocolate" in token_set:
         attrs["flavor"] = "chocolate"

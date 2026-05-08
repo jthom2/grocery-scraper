@@ -88,3 +88,44 @@ def test_best_is_null_when_all_candidates_are_different():
     assert aldi.status == "no_match"
     assert aldi.best is None
     assert aldi.candidates[0].decision == "different"
+
+
+def test_unsized_fat_free_milk_prefers_fluid_gallon_over_dry_milk():
+    response = match_products(
+        "fat free milk",
+        [
+            {
+                "retailer": "walmart",
+                "product_id": "dry",
+                "name": "Great Value Instant Nonfat Dry Milk, 64 oz Bag",
+                "brand": "Great Value",
+            },
+            {
+                "retailer": "walmart",
+                "product_id": "gallon",
+                "name": "Great Value Fat-Free Milk, Gallon, 128 fl oz",
+                "brand": "Great Value",
+            },
+            {
+                "retailer": "walmart",
+                "product_id": "cheese",
+                "name": "Happy Farms 2% Milk American Cheese Singles",
+                "brand": "Happy Farms",
+                "size": "10.67 oz",
+            },
+        ],
+        retailers=["walmart"],
+    )
+
+    walmart = response.matches_by_retailer["walmart"]
+    dry = next(result for result in walmart.candidates if result.product["product_id"] == "dry")
+    cheese = next(result for result in walmart.candidates if result.product["product_id"] == "cheese")
+
+    assert walmart.status == "equivalent"
+    assert walmart.best.product["product_id"] == "gallon"
+    assert walmart.best.decision == "equivalent"
+    assert not any("missing comparable size" in penalty for penalty in walmart.best.penalties)
+    assert dry.decision == "different"
+    assert any("form" in penalty for penalty in dry.penalties)
+    assert cheese.fingerprint.category == "cheese"
+    assert cheese.decision == "different"

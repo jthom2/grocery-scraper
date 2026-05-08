@@ -117,14 +117,45 @@ def test_token_aliases_support_equivalent_milk_descriptions():
     assert result.decision == "equivalent"
 
 
-def test_missing_size_is_not_equivalent():
+def test_query_without_size_does_not_penalize_candidate_size():
     reference = fingerprint_query("2% milk")
     candidate = _product("Great Value 2% Reduced Fat Milk, 1 Gallon", "Great Value", "walmart")
 
     result = score_fingerprints(reference, candidate)
 
+    assert result.decision == "equivalent"
+    assert not any("missing comparable size" in penalty for penalty in result.penalties)
+
+
+def test_query_with_size_still_penalizes_missing_candidate_size():
+    reference = fingerprint_query("2% milk 1 gallon")
+    candidate = _product("Great Value 2% Reduced Fat Milk", "Great Value", "walmart")
+
+    result = score_fingerprints(reference, candidate)
+
     assert result.decision == "substitute"
     assert any("missing comparable size" in penalty for penalty in result.penalties)
+
+
+def test_fat_free_milk_matches_skim_milk_without_size():
+    reference = fingerprint_query("fat free milk")
+    candidate = _product("Great Value Fat-Free Milk, Gallon, 128 fl oz", "Great Value", "walmart")
+
+    result = score_fingerprints(reference, candidate)
+
+    assert result.decision == "equivalent"
+    assert result.fingerprint.attributes["fat_level"] == "skim"
+    assert not any("missing comparable size" in penalty for penalty in result.penalties)
+
+
+def test_non_fat_dry_milk_is_not_equivalent_to_fluid_fat_free_milk():
+    reference = fingerprint_query("fat free milk")
+    candidate = _product("Great Value Instant Non-Fat Dry Milk, 64 oz Bag", "Great Value", "walmart")
+
+    result = score_fingerprints(reference, candidate)
+
+    assert result.decision == "different"
+    assert any("form" in penalty for penalty in result.penalties)
 
 
 def test_branded_query_does_not_equate_to_store_brand_product():

@@ -75,6 +75,10 @@ def test_paper_goods_detected():
     assert detect_category(tokenize("paper towel 6 roll")) == "paper_goods"
 
 
+def test_cheese_wins_over_incidental_milk_token():
+    assert detect_category(tokenize("Happy Farms 2% Milk American Cheese Singles")) == "cheese"
+
+
 # --- yogurt attributes ---
 
 
@@ -100,6 +104,21 @@ def test_yogurt_nonfat():
     attrs = extract_attributes("yogurt", text, tokens)
     assert attrs["fat_level"] == "nonfat"
     assert attrs["flavor"] == "plain"
+
+
+def test_fat_free_and_non_fat_normalize_to_skim_milk():
+    fat_free_text = normalize_text("Great Value Fat-Free Milk")
+    fat_free_tokens = tokenize("Great Value Fat-Free Milk")
+    fat_free_attrs = extract_attributes("milk", fat_free_text, fat_free_tokens)
+
+    non_fat_text = normalize_text("Great Value Non-Fat Dry Milk")
+    non_fat_tokens = tokenize("Great Value Non-Fat Dry Milk")
+    non_fat_attrs = extract_attributes("milk", non_fat_text, non_fat_tokens)
+
+    assert fat_free_attrs["fat_level"] == "skim"
+    assert fat_free_attrs["form"] == "fluid"
+    assert non_fat_attrs["fat_level"] == "skim"
+    assert non_fat_attrs["form"] == "dry"
 
 
 # --- juice attributes ---

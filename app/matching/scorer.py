@@ -85,6 +85,7 @@ def score_fingerprints(
     reasons = []
     penalties = []
     score = 0.0
+    available_score = 0.0
     equivalent_possible = True
 
     categories_compatible, strict_category_match, category_reason = _category_result(reference, candidate)
@@ -101,13 +102,16 @@ def score_fingerprints(
         )
 
     if strict_category_match:
-        score += SCORE_WEIGHTS["category"]
+        category_weight = SCORE_WEIGHTS["category"]
     else:
-        score += SCORE_WEIGHTS["general_category"]
+        category_weight = SCORE_WEIGHTS["general_category"]
+    score += category_weight
+    available_score += category_weight
     reasons.append(category_reason)
 
-    if reference.size and candidate.size:
-        if not sizes_compatible(reference.size, candidate.size):
+    if reference.size:
+        available_score += SCORE_WEIGHTS["size_match"]
+        if candidate.size and not sizes_compatible(reference.size, candidate.size):
             penalties.append(
                 f"size conflict: {reference.size.value:g} {reference.size.unit} vs "
                 f"{candidate.size.value:g} {candidate.size.unit}"
@@ -121,12 +125,13 @@ def score_fingerprints(
                 reasons=reasons,
                 penalties=penalties,
             )
-        score += SCORE_WEIGHTS["size_match"]
-        reasons.append(f"same normalized size: {reference.size.value:g} {reference.size.unit}")
-    else:
-        equivalent_possible = False
-        penalties.append("missing comparable size")
-        score += SCORE_WEIGHTS["missing_size"]
+        if candidate.size:
+            score += SCORE_WEIGHTS["size_match"]
+            reasons.append(f"same normalized size: {reference.size.value:g} {reference.size.unit}")
+        else:
+            equivalent_possible = False
+            penalties.append("missing comparable size")
+            score += SCORE_WEIGHTS["missing_size"]
 
     attrs_match, has_missing_attr, attr_reasons, attr_penalties = _critical_attribute_result(reference, candidate)
     reasons.extend(attr_reasons)
@@ -148,6 +153,7 @@ def score_fingerprints(
     else:
         score += SCORE_WEIGHTS["attribute_match"]
         reasons.append("no critical attribute conflicts")
+    available_score += SCORE_WEIGHTS["attribute_match"]
 
     brand_allowed, brand_reason = brand_allows_equivalence(reference, candidate)
     if brand_allowed:
@@ -168,9 +174,11 @@ def score_fingerprints(
         equivalent_possible = False
         penalties.append(brand_reason)
         score += SCORE_WEIGHTS["brand_mismatch"]
+    available_score += SCORE_WEIGHTS["brand_match"]
 
     token_similarity = _token_similarity(reference, candidate)
     score += token_similarity * SCORE_WEIGHTS["token_similarity"]
+    available_score += SCORE_WEIGHTS["token_similarity"]
     reasons.append(f"token similarity: {token_similarity:.2f}")
 
     if not strict_category_match and token_similarity < GENERAL_EQUIVALENCE_TOKEN_THRESHOLD:
@@ -179,6 +187,8 @@ def score_fingerprints(
             f"general category token similarity below {GENERAL_EQUIVALENCE_TOKEN_THRESHOLD:.2f}"
         )
 
+    if available_score:
+        score = score / available_score
     score = min(round(score, 4), 1.0)
     if equivalent_possible and score >= equivalence_threshold:
         decision = "equivalent"

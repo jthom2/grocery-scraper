@@ -18,7 +18,9 @@ PHRASE_ALIASES: Final[tuple[tuple[str, str], ...]] = (
     ("1 percent", "1%"),
     ("one percent", "1%"),
     ("low fat", "1%"),
+    ("fat-free", "skim"),
     ("fat free", "skim"),
+    ("non-fat", "nonfat"),
     ("non fat", "nonfat"),
     ("lactose-free", "lactose free"),
     ("cage-free", "cage free"),
@@ -164,7 +166,7 @@ STRICT_CATEGORIES: Final[set[str]] = {
 }
 
 CRITICAL_ATTRIBUTES: Final[dict[str, tuple[str, ...]]] = {
-    "milk": ("fat_level", "organic", "lactose_free", "flavor"),
+    "milk": ("fat_level", "organic", "lactose_free", "flavor", "form"),
     "eggs": ("egg_size", "grade", "organic", "cage_free", "free_range", "pasture_raised"),
     "bread": ("bread_type", "organic"),
     "butter": ("salt", "form", "organic"),
