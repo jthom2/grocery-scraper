@@ -32,9 +32,9 @@ class AldiSpider(Spider):
     name = "aldi_batch_spider"
     allowed_domains = {"aldi.us", "www.aldi.us"}
 
-    concurrent_requests = 1
+    concurrent_requests = 3
     concurrent_requests_per_domain = 1
-    download_delay = 12.0
+    download_delay = 2.0
     max_blocked_retries = 3
 
     def __init__(self, queries: list[str], zip_code: str, location_id: str | None = None, max_results: int = 10, *args, **kwargs):
