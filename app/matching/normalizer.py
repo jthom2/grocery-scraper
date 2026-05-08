@@ -31,14 +31,54 @@ def tokenize(text: str | None) -> list[str]:
     return tokens
 
 
+# categories that should be checked before produce (which has broad triggers)
+_CATEGORY_PRIORITY = [
+    "milk", "eggs", "bread", "butter", "cheese",
+    "yogurt", "juice", "coffee",
+    "pasta", "rice",
+    "chicken", "beef", "pork",
+    "snacks", "water", "paper_goods", "packaged_good",
+    "produce",
+    "frozen",
+]
+
+# phrase-based categories that require multi-word matching
+_PHRASE_CATEGORIES: dict[str, list[str]] = {
+    "paper_goods": ["paper towel", "toilet paper"],
+}
+
+
 def detect_category(tokens: list[str]) -> str | None:
     token_set = set(tokens)
+    joined = " ".join(tokens)
 
-    for category, aliases in CATEGORY_ALIASES.items():
-        if token_set & aliases:
+    has_frozen = "frozen" in token_set
+    non_frozen_tokens = token_set - {"frozen"}
+
+    for category in _CATEGORY_PRIORITY:
+        if category == "frozen":
+            continue
+
+        # check phrase-based matches first
+        phrases = _PHRASE_CATEGORIES.get(category, [])
+        for phrase in phrases:
+            if phrase in joined:
+                if has_frozen:
+                    return "frozen"
+                return category
+
+        # then token-based
+        aliases = CATEGORY_ALIASES.get(category, set())
+        if non_frozen_tokens & aliases:
+            if has_frozen:
+                return "frozen"
             return category
 
+    if has_frozen:
+        return "frozen"
+
     return None
+
 
 
 def _has_any(token_set: set[str], values: set[str]) -> bool:
@@ -138,7 +178,7 @@ def _butter_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
     elif "salted" in token_set:
         attrs["salt"] = "salted"
 
-    if _has_any(token_set, {"sticks", "stick", "quarters"}):
+    if _has_any(token_set, {"stick", "quarters"}):
         attrs["form"] = "sticks"
     elif _has_any(token_set, {"spread", "spreadable", "tub"}):
         attrs["form"] = "spread"
@@ -167,7 +207,7 @@ def _cheese_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
 
     if "shredded" in token_set:
         attrs["form"] = "shredded"
-    elif "sliced" in token_set or "slices" in token_set:
+    elif "sliced" in token_set:
         attrs["form"] = "sliced"
     elif "block" in token_set or "chunk" in token_set:
         attrs["form"] = "block"
@@ -175,6 +215,220 @@ def _cheese_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
         attrs["form"] = "string"
     elif "crumbles" in token_set or "crumbled" in token_set:
         attrs["form"] = "crumbled"
+
+    return attrs
+
+
+def _yogurt_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
+    attrs = {
+        "organic": "organic" in token_set,
+    }
+
+    if "greek" in token_set:
+        attrs["style"] = "greek"
+    elif "icelandic" in token_set or "skyr" in token_set:
+        attrs["style"] = "icelandic"
+    else:
+        attrs["style"] = "regular"
+
+    # flavor detection
+    for flavor in ("vanilla", "strawberry", "blueberry", "peach",
+                   "raspberry", "cherry", "mango", "coconut",
+                   "honey", "lemon", "lime", "key lime"):
+        if flavor in token_set or _phrase(text, flavor):
+            attrs["flavor"] = flavor
+            break
+    else:
+        if "plain" in token_set or "original" in token_set:
+            attrs["flavor"] = "plain"
+
+    # fat level
+    if "nonfat" in token_set or "skim" in token_set or _phrase(text, "fat free") or "0%" in token_set:
+        attrs["fat_level"] = "nonfat"
+    elif "2%" in token_set or _phrase(text, "low fat"):
+        attrs["fat_level"] = "lowfat"
+    elif "whole" in token_set or _phrase(text, "whole milk"):
+        attrs["fat_level"] = "whole"
+
+    return attrs
+
+
+def _juice_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
+    attrs = {
+        "organic": "organic" in token_set,
+    }
+
+    # fruit detection
+    for fruit in ("orange", "apple", "grape", "cranberry", "pineapple",
+                  "grapefruit", "lemon", "lemonade", "tomato", "carrot"):
+        if fruit in token_set:
+            attrs["fruit"] = fruit
+            break
+
+    if _phrase(text, "not from concentrate"):
+        attrs["concentrate"] = "not_from_concentrate"
+    elif _phrase(text, "from concentrate"):
+        attrs["concentrate"] = "from_concentrate"
+
+    return attrs
+
+
+def _coffee_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
+    attrs = {
+        "organic": "organic" in token_set,
+        "decaf": _has_any(token_set, {"decaf", "decaffeinated"}),
+    }
+
+    if "dark" in token_set:
+        attrs["roast"] = "dark"
+    elif "medium" in token_set:
+        attrs["roast"] = "medium"
+    elif "light" in token_set or "blonde" in token_set:
+        attrs["roast"] = "light"
+
+    if _phrase(text, "whole bean") or _has_any(token_set, {"bean", "beans"}):
+        attrs["form"] = "whole_bean"
+    elif _has_any(token_set, {"ground"}):
+        attrs["form"] = "ground"
+    elif _has_any(token_set, {"pods", "pod", "kcup", "capsule", "capsules"}):
+        attrs["form"] = "pods"
+    elif "instant" in token_set:
+        attrs["form"] = "instant"
+
+    return attrs
+
+
+def _chicken_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
+    attrs = {
+        "organic": "organic" in token_set,
+        "boneless": "boneless" in token_set,
+        "skinless": "skinless" in token_set,
+    }
+
+    for cut in ("breast", "thigh", "drumstick", "wing", "tenderloin", "whole"):
+        if cut in token_set:
+            attrs["cut"] = cut
+            break
+
+    if "frozen" in token_set or _phrase(text, "flash frozen"):
+        attrs["fresh_or_frozen"] = "frozen"
+    else:
+        attrs["fresh_or_frozen"] = "fresh"
+
+    return attrs
+
+
+def _beef_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
+    attrs = {
+        "organic": "organic" in token_set,
+        "grass_fed": _phrase(text, "grass fed"),
+    }
+
+    if "ground" in token_set:
+        attrs["cut"] = "ground"
+    elif "steak" in token_set:
+        attrs["cut"] = "steak"
+    elif "roast" in token_set:
+        attrs["cut"] = "roast"
+    elif "stew" in token_set:
+        attrs["cut"] = "stew"
+    elif "tenderloin" in token_set:
+        attrs["cut"] = "tenderloin"
+    elif "brisket" in token_set:
+        attrs["cut"] = "brisket"
+
+    # lean percentage (e.g. "80/20", "93/7", "90% lean")
+    lean_match = re.search(r"(\d{2,3})\s*/\s*(\d{1,2})", text)
+    if lean_match:
+        attrs["lean_pct"] = int(lean_match.group(1))
+    else:
+        lean_pct_match = re.search(r"(\d{2,3})\s*%\s*lean", text)
+        if lean_pct_match:
+            attrs["lean_pct"] = int(lean_pct_match.group(1))
+
+    return attrs
+
+
+def _pork_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
+    attrs = {
+        "organic": "organic" in token_set,
+    }
+
+    for cut in ("chop", "tenderloin", "roast", "ribs", "loin",
+                "shoulder", "ground", "bacon", "ham", "sausage"):
+        if cut in token_set:
+            attrs["cut"] = cut
+            break
+
+    if "frozen" in token_set:
+        attrs["fresh_or_frozen"] = "frozen"
+    else:
+        attrs["fresh_or_frozen"] = "fresh"
+
+    return attrs
+
+
+def _produce_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
+    return {
+        "organic": "organic" in token_set,
+    }
+
+
+def _pasta_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
+    attrs = {
+        "organic": "organic" in token_set,
+        "whole_wheat": _phrase(text, "whole wheat") or "whole" in token_set,
+    }
+
+    for shape in ("spaghetti", "penne", "linguine", "fettuccine",
+                   "rigatoni", "rotini", "elbow", "macaroni",
+                   "lasagna", "farfalle", "angel hair", "ziti"):
+        if shape in token_set or _phrase(text, shape):
+            attrs["shape"] = shape
+            break
+
+    return attrs
+
+
+def _rice_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
+    attrs = {
+        "organic": "organic" in token_set,
+    }
+
+    if "jasmine" in token_set:
+        attrs["variety"] = "jasmine"
+    elif "basmati" in token_set:
+        attrs["variety"] = "basmati"
+    elif "wild" in token_set:
+        attrs["variety"] = "wild"
+    elif "brown" in token_set:
+        attrs["variety"] = "brown"
+    elif "white" in token_set:
+        attrs["variety"] = "white"
+    elif "arborio" in token_set:
+        attrs["variety"] = "arborio"
+
+    return attrs
+
+
+def _frozen_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
+    return {
+        "organic": "organic" in token_set,
+        "frozen": True,
+    }
+
+
+def _paper_goods_attributes(text: str, token_set: set[str]) -> dict[str, Any]:
+    attrs: dict[str, Any] = {}
+
+    if _phrase(text, "paper towel"):
+        attrs["type"] = "paper_towel"
+    elif _phrase(text, "toilet paper") or "bath" in token_set:
+        attrs["type"] = "toilet_paper"
+    elif "napkin" in token_set:
+        attrs["type"] = "napkin"
+    elif "tissue" in token_set:
+        attrs["type"] = "tissue"
 
     return attrs
 
@@ -192,6 +446,28 @@ def extract_attributes(category: str | None, text: str, tokens: list[str]) -> di
         return _butter_attributes(text, token_set)
     if category == "cheese":
         return _cheese_attributes(text, token_set)
+    if category == "yogurt":
+        return _yogurt_attributes(text, token_set)
+    if category == "juice":
+        return _juice_attributes(text, token_set)
+    if category == "coffee":
+        return _coffee_attributes(text, token_set)
+    if category == "chicken":
+        return _chicken_attributes(text, token_set)
+    if category == "beef":
+        return _beef_attributes(text, token_set)
+    if category == "pork":
+        return _pork_attributes(text, token_set)
+    if category == "produce":
+        return _produce_attributes(text, token_set)
+    if category == "pasta":
+        return _pasta_attributes(text, token_set)
+    if category == "rice":
+        return _rice_attributes(text, token_set)
+    if category == "frozen":
+        return _frozen_attributes(text, token_set)
+    if category == "paper_goods":
+        return _paper_goods_attributes(text, token_set)
 
     return {}
 

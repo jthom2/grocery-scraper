@@ -136,6 +136,54 @@ def test_branded_query_does_not_equate_to_store_brand_product():
     assert result.decision != "equivalent"
 
 
+def test_greek_yogurt_equivalent_across_retailers():
+    reference = _product("Kroger Greek Yogurt Vanilla 32 oz", "Kroger", "kroger")
+    candidate = _product("Great Value Greek Yogurt Vanilla 32 oz", "Great Value", "walmart")
+
+    result = score_fingerprints(reference, candidate)
+
+    assert result.decision == "equivalent"
+
+
+def test_ground_beef_lean_mismatch_is_different():
+    reference = _product("Ground Beef 80/20 1 lb", "Great Value", "walmart")
+    candidate = _product("Ground Beef 93/7 1 lb", "Great Value", "walmart")
+
+    result = score_fingerprints(reference, candidate)
+
+    assert result.decision == "different"
+    assert any("lean_pct" in p for p in result.penalties)
+
+
+def test_fresh_chicken_is_not_frozen_chicken():
+    reference = _product("Chicken Breast Boneless Skinless 2 lb", "Tyson", "walmart")
+    candidate = _product("Frozen Chicken Breast Boneless Skinless 2 lb", "Tyson", "walmart")
+
+    result = score_fingerprints(reference, candidate)
+
+    assert result.decision == "different"
+    assert any("category" in p for p in result.penalties)
+
+
+def test_organic_produce_not_equivalent_to_conventional():
+    reference = fingerprint_query("organic bananas")
+    candidate = _product("Bananas per lb", None, "walmart")
+
+    result = score_fingerprints(reference, candidate)
+
+    # organic mismatch should prevent equivalence
+    assert result.decision != "equivalent"
+
+
+def test_same_pasta_shape_equivalent_across_store_brands():
+    reference = _product("Kroger Spaghetti 16 oz", "Kroger", "kroger")
+    candidate = _product("Great Value Spaghetti 16 oz", "Great Value", "walmart")
+
+    result = score_fingerprints(reference, candidate)
+
+    assert result.decision == "equivalent"
+
+
 def test_match_products_uses_deterministic_tie_sort():
     products = [
         {

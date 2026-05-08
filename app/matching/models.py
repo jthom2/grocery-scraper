@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 MatchDecision = Literal["equivalent", "substitute", "different"]
 BrandClass = Literal["store_brand", "national_brand", "unknown"]
-SizeUnit = Literal["fl_oz", "oz", "ct"]
+SizeUnit = Literal["fl_oz", "oz", "ct", "ml", "l", "each", "sq_ft"]
 
 
 class MatchingBaseModel(BaseModel):
