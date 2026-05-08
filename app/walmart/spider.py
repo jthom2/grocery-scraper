@@ -14,8 +14,8 @@ class WalmartSpider(Spider):
     name = "walmart_batch_spider"
     
     # "Low and Slow" Configuration
-    concurrency = 1  # strictly one at a time
-    delay = 12.0     # 12 seconds between requests
+    concurrent_requests = 1  # strictly one at a time
+    download_delay = 12.0     # 12 seconds between requests
     max_blocked_retries = 3
     stealthy_headers = True
     impersonate = ["chrome", "firefox", "safari", "edge"] # cycle fingerprints
@@ -37,7 +37,8 @@ class WalmartSpider(Spider):
                 url, 
                 cookies=self.cookies, 
                 headers=self.headers,
-                meta={"query": query}
+                meta={"query": query},
+                impersonate=random.choice(self.impersonate)
             )
 
     async def is_blocked(self, response: Response) -> bool:
