@@ -1,10 +1,11 @@
 import logging
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.errors import ScraperError
 from app.api.exceptions import scraper_exception_handler, generic_exception_handler
-from app.api.routers import aldi, kroger, publix, walmart, unified
+from app.api.routers import aldi, kroger, matching, publix, walmart, unified
 
 # setup logging
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +39,7 @@ app.include_router(kroger.router, prefix="/api/v1/kroger", tags=["kroger"])
 app.include_router(publix.router, prefix="/api/v1/publix", tags=["publix"])
 app.include_router(walmart.router, prefix="/api/v1/walmart", tags=["walmart"])
 app.include_router(unified.router, prefix="/api/v1", tags=["unified"])
+app.include_router(matching.router, prefix="/api/v1/match", tags=["matching"])
 
 # system endpoints
 
@@ -47,7 +49,16 @@ async def health_check():
 
 def start():
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    host = os.getenv("API_HOST", "0.0.0.0")
+    port = int(os.getenv("API_PORT", "8000"))
+    browser_host = "127.0.0.1" if host == "0.0.0.0" else host
+
+    logger.info("Starting Grocery Scraper API on %s:%s", host, port)
+    logger.info("Swagger UI: http://%s:%s/docs", browser_host, port)
+    logger.info("OpenAPI JSON: http://%s:%s/openapi.json", browser_host, port)
+
+    uvicorn.run(app, host=host, port=port)
 
 if __name__ == "__main__":
     start()
