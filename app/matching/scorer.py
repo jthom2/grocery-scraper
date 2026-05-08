@@ -2,16 +2,15 @@ from typing import Any
 
 from app.matching.brands import brand_allows_equivalence
 from app.matching.models import MatchResult, ProductFingerprint
+from app.matching.rules import (
+    CRITICAL_ATTRIBUTES,
+    GENERAL_EQUIVALENCE_TOKEN_THRESHOLD,
+    REJECT_SCORES,
+    SCORE_WEIGHTS,
+    STRICT_CATEGORIES,
+    SUBSTITUTE_THRESHOLD,
+)
 from app.matching.units import sizes_compatible
-
-
-_CRITICAL_ATTRIBUTES = {
-    "milk": ("fat_level", "organic", "lactose_free", "flavor"),
-    "eggs": ("egg_size", "grade", "organic", "cage_free", "free_range", "pasture_raised"),
-    "bread": ("bread_type", "organic"),
-    "butter": ("salt", "form", "organic"),
-    "cheese": ("variety", "form", "organic"),
-}
 
 
 def _token_similarity(reference: ProductFingerprint, candidate: ProductFingerprint) -> float:
@@ -27,7 +26,7 @@ def _critical_attribute_result(reference: ProductFingerprint, candidate: Product
     penalties = []
     has_missing = False
 
-    for attr in _CRITICAL_ATTRIBUTES.get(reference.category or "", ()):
+    for attr in CRITICAL_ATTRIBUTES.get(reference.category or "", ()):
         ref_value = reference.attributes.get(attr)
         candidate_value = candidate.attributes.get(attr)
 
@@ -50,8 +49,31 @@ def _critical_attribute_result(reference: ProductFingerprint, candidate: Product
     return True, has_missing, reasons, penalties
 
 
-def _same_category(reference: ProductFingerprint, candidate: ProductFingerprint) -> bool:
-    return bool(reference.category and candidate.category and reference.category == candidate.category)
+def _is_strict_category(category: str | None) -> bool:
+    return bool(category and category in STRICT_CATEGORIES)
+
+
+def _category_result(reference: ProductFingerprint, candidate: ProductFingerprint) -> tuple[bool, bool, str]:
+    ref_category = reference.category
+    candidate_category = candidate.category
+
+    if ref_category and candidate_category and ref_category == candidate_category:
+        return True, _is_strict_category(ref_category), f"same category: {ref_category}"
+
+    if _is_strict_category(ref_category) or _is_strict_category(candidate_category):
+        return False, False, f"category mismatch: {ref_category or 'unknown'} vs {candidate_category or 'unknown'}"
+
+    return True, False, (
+        f"general category fallback: {ref_category or 'unknown'} vs "
+        f"{candidate_category or 'unknown'}"
+    )
+
+
+def _has_national_brand_conflict(reference: ProductFingerprint, candidate: ProductFingerprint) -> bool:
+    same_brand = bool(reference.normalized_brand and reference.normalized_brand == candidate.normalized_brand)
+    return not same_brand and (
+        reference.brand_class == "national_brand" or candidate.brand_class == "national_brand"
+    )
 
 
 def score_fingerprints(
@@ -65,8 +87,9 @@ def score_fingerprints(
     score = 0.0
     equivalent_possible = True
 
-    if not _same_category(reference, candidate):
-        penalties.append(f"category mismatch: {reference.category or 'unknown'} vs {candidate.category or 'unknown'}")
+    categories_compatible, strict_category_match, category_reason = _category_result(reference, candidate)
+    if not categories_compatible:
+        penalties.append(category_reason)
         return MatchResult(
             decision="different",
             score=0.0,
@@ -76,8 +99,11 @@ def score_fingerprints(
             penalties=penalties,
         )
 
-    score += 0.2
-    reasons.append(f"same category: {reference.category}")
+    if strict_category_match:
+        score += SCORE_WEIGHTS["category"]
+    else:
+        score += SCORE_WEIGHTS["general_category"]
+    reasons.append(category_reason)
 
     if reference.size and candidate.size:
         if not sizes_compatible(reference.size, candidate.size):
@@ -87,18 +113,18 @@ def score_fingerprints(
             )
             return MatchResult(
                 decision="different",
-                score=0.25,
+                score=REJECT_SCORES["size_conflict"],
                 fingerprint=candidate,
                 product=product,
                 reasons=reasons,
                 penalties=penalties,
             )
-        score += 0.25
+        score += SCORE_WEIGHTS["size_match"]
         reasons.append(f"same normalized size: {reference.size.value:g} {reference.size.unit}")
     else:
         equivalent_possible = False
         penalties.append("missing comparable size")
-        score += 0.05
+        score += SCORE_WEIGHTS["missing_size"]
 
     attrs_match, has_missing_attr, attr_reasons, attr_penalties = _critical_attribute_result(reference, candidate)
     reasons.extend(attr_reasons)
@@ -106,7 +132,7 @@ def score_fingerprints(
     if not attrs_match:
         return MatchResult(
             decision="different",
-            score=min(score, 0.45),
+            score=min(score, REJECT_SCORES["attribute_conflict_cap"]),
             fingerprint=candidate,
             product=product,
             reasons=reasons,
@@ -115,28 +141,44 @@ def score_fingerprints(
 
     if has_missing_attr:
         equivalent_possible = False
-        score += 0.12
+        score += SCORE_WEIGHTS["attribute_missing"]
     else:
-        score += 0.25
+        score += SCORE_WEIGHTS["attribute_match"]
         reasons.append("no critical attribute conflicts")
 
     brand_allowed, brand_reason = brand_allows_equivalence(reference, candidate)
     if brand_allowed:
-        score += 0.15
+        score += SCORE_WEIGHTS["brand_match"]
         reasons.append(brand_reason)
     else:
+        if _has_national_brand_conflict(reference, candidate):
+            penalties.append(brand_reason)
+            return MatchResult(
+                decision="different",
+                score=min(score, REJECT_SCORES["brand_conflict_cap"]),
+                fingerprint=candidate,
+                product=product,
+                reasons=reasons,
+                penalties=penalties,
+            )
         equivalent_possible = False
         penalties.append(brand_reason)
-        score += 0.04
+        score += SCORE_WEIGHTS["brand_mismatch"]
 
     token_similarity = _token_similarity(reference, candidate)
-    score += token_similarity * 0.15
+    score += token_similarity * SCORE_WEIGHTS["token_similarity"]
     reasons.append(f"token similarity: {token_similarity:.2f}")
+
+    if not strict_category_match and token_similarity < GENERAL_EQUIVALENCE_TOKEN_THRESHOLD:
+        equivalent_possible = False
+        penalties.append(
+            f"general category token similarity below {GENERAL_EQUIVALENCE_TOKEN_THRESHOLD:.2f}"
+        )
 
     score = min(round(score, 4), 1.0)
     if equivalent_possible and score >= equivalence_threshold:
         decision = "equivalent"
-    elif score >= 0.62:
+    elif score >= SUBSTITUTE_THRESHOLD:
         decision = "substitute"
     else:
         decision = "different"

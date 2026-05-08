@@ -3,41 +3,40 @@ from typing import Any
 
 from app.matching.brands import classify_brand, infer_brand
 from app.matching.models import ProductFingerprint
+from app.matching.rules import CATEGORY_ALIASES, PHRASE_ALIASES, STOPWORDS, TOKEN_ALIASES
 from app.matching.units import parse_size
 
 
 _TOKEN_RE = re.compile(r"[a-z0-9%']+")
-_STOPWORDS = {
-    "and",
-    "brand",
-    "fresh",
-    "grocery",
-    "of",
-    "the",
-    "with",
-}
+
+
+def normalize_text(text: str | None) -> str:
+    if not text:
+        return ""
+
+    value = text.lower().replace("&", " and ")
+    for source, replacement in PHRASE_ALIASES:
+        pattern = rf"(?<![a-z0-9]){re.escape(source)}(?![a-z0-9])"
+        value = re.sub(pattern, replacement, value)
+    return value
 
 
 def tokenize(text: str | None) -> list[str]:
-    if not text:
-        return []
-    tokens = _TOKEN_RE.findall(text.lower().replace("&", " and "))
-    return [token for token in tokens if token not in _STOPWORDS]
+    normalized = normalize_text(text)
+    tokens = []
+    for token in _TOKEN_RE.findall(normalized):
+        canonical = TOKEN_ALIASES.get(token.replace("'", ""), token.replace("'", ""))
+        if canonical not in STOPWORDS:
+            tokens.append(canonical)
+    return tokens
 
 
 def detect_category(tokens: list[str]) -> str | None:
     token_set = set(tokens)
 
-    if "milk" in token_set:
-        return "milk"
-    if "egg" in token_set or "eggs" in token_set:
-        return "eggs"
-    if "bread" in token_set or "loaf" in token_set:
-        return "bread"
-    if "butter" in token_set:
-        return "butter"
-    if "cheese" in token_set:
-        return "cheese"
+    for category, aliases in CATEGORY_ALIASES.items():
+        if token_set & aliases:
+            return category
 
     return None
 
@@ -215,12 +214,13 @@ def _fingerprint(
     explicit_brand: str | None = None,
     is_query: bool = False,
 ) -> ProductFingerprint:
+    normalized_text = normalize_text(text)
     tokens = tokenize(text)
     category = detect_category(tokens)
     normalized_brand = infer_brand(text, explicit_brand)
     brand_class = classify_brand(normalized_brand, retailer)
     size = parse_size(text, category=category)
-    attributes = extract_attributes(category, text.lower(), tokens)
+    attributes = extract_attributes(category, normalized_text, tokens)
 
     return ProductFingerprint(
         source_name=source_name,

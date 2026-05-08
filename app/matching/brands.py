@@ -1,67 +1,18 @@
 import re
 
+from app.matching.rules import BRAND_ALIASES, NATIONAL_BRANDS, STORE_BRANDS
 
-STORE_BRANDS = {
-    "walmart": {
-        "bettergoods",
-        "equate",
-        "great value",
-        "marketside",
-        "sam's choice",
-        "sams choice",
-    },
-    "kroger": {
-        "kroger",
-        "private selection",
-        "simple truth",
-        "simple truth organic",
-    },
-    "publix": {
-        "greenwise",
-        "publix",
-    },
-    "aldi": {
-        "countryside creamery",
-        "fit active",
-        "friendly farms",
-        "happy farms",
-        "livegfree",
-        "millville",
-        "simply nature",
-        "specially selected",
-    },
-}
 
 _ALL_STORE_BRANDS = {brand for brands in STORE_BRANDS.values() for brand in brands}
-
-NATIONAL_BRANDS = {
-    "cabot",
-    "cheerios",
-    "dave's killer bread",
-    "daves killer bread",
-    "eggland's best",
-    "egglands best",
-    "fairlife",
-    "horizon organic",
-    "kraft",
-    "lactaid",
-    "land o lakes",
-    "nature's own",
-    "natures own",
-    "pepperidge farm",
-    "philadelphia",
-    "sargento",
-    "tillamook",
-    "vital farms",
-}
 
 
 def normalize_brand(brand: str | None) -> str | None:
     if not brand:
         return None
-    value = brand.lower().replace("&", " and ")
+    value = brand.lower().replace("&", " and ").replace("'", "")
     value = re.sub(r"[^a-z0-9%']+", " ", value)
     value = re.sub(r"\s+", " ", value).strip()
+    value = BRAND_ALIASES.get(value, value)
     return value or None
 
 

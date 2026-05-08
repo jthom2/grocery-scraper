@@ -4,7 +4,8 @@ from fractions import Fraction
 from app.matching.models import ParsedSize
 
 
-_VALUE_PATTERN = r"(?P<value>\d+(?:\.\d+)?|\d+\s*/\s*\d+)"
+_NUMBER_PATTERN = r"\d+\s+\d+\s*/\s*\d+|\d+\s*/\s*\d+|\d+(?:\.\d+)?"
+_VALUE_PATTERN = rf"(?P<value>{_NUMBER_PATTERN})"
 _UNIT_PATTERN = (
     r"(?P<unit>"
     r"fluid\s+ounces?|fl\.?\s*oz\.?|floz|"
@@ -20,6 +21,22 @@ _UNIT_PATTERN = (
     r")"
 )
 _SIZE_RE = re.compile(rf"\b{_VALUE_PATTERN}\s*{_UNIT_PATTERN}\b", re.IGNORECASE)
+_MULTIPACK_RE = re.compile(
+    rf"\b(?P<count>\d+)\s*(?:x|pk|packs?(?:\s+of)?|-\s*packs?)\s*"
+    rf"(?P<item_value>{_NUMBER_PATTERN})\s*"
+    rf"(?P<item_unit>"
+    r"fluid\s+ounces?|fl\.?\s*oz\.?|floz|"
+    r"gallons?|gal\.?|"
+    r"quarts?|qt\.?|"
+    r"pints?|pt\.?|"
+    r"pounds?|lbs?\.?|lb\.?|"
+    r"ounces?|oz\.?|"
+    r"grams?|g|"
+    r"kilograms?|kg|"
+    r"counts?|ct\.?"
+    r")\b",
+    re.IGNORECASE,
+)
 _HALF_GALLON_RE = re.compile(r"\bhalf\s+(?:gallon|gal\.?)\b", re.IGNORECASE)
 _DOZEN_RE = re.compile(r"\b(?:a\s+)?dozen\b", re.IGNORECASE)
 
@@ -75,6 +92,11 @@ _COUNT_UNITS = {
 
 
 def _parse_number(value: str) -> float:
+    stripped = re.sub(r"\s+", " ", value.strip())
+    if " " in stripped and "/" in stripped:
+        whole, fraction = stripped.split(" ", 1)
+        return float(whole) + float(Fraction(fraction.replace(" ", "")))
+
     compact = value.replace(" ", "")
     if "/" in compact:
         return float(Fraction(compact))
@@ -85,11 +107,7 @@ def _normalize_unit(unit: str) -> str:
     return re.sub(r"\s+", " ", unit.lower().strip())
 
 
-def _size_from_match(match: re.Match, category: str | None = None) -> ParsedSize | None:
-    value = _parse_number(match.group("value"))
-    unit = _normalize_unit(match.group("unit"))
-    source = match.group(0)
-
+def _size_from_parts(value: float, unit: str, source: str, category: str | None = None) -> ParsedSize | None:
     if unit in _VOLUME_UNITS:
         return ParsedSize(value=value * _VOLUME_UNITS[unit], unit="fl_oz", source=source)
 
@@ -104,6 +122,21 @@ def _size_from_match(match: re.Match, category: str | None = None) -> ParsedSize
     return None
 
 
+def _size_from_match(match: re.Match, category: str | None = None) -> ParsedSize | None:
+    value = _parse_number(match.group("value"))
+    unit = _normalize_unit(match.group("unit"))
+    source = match.group(0)
+    return _size_from_parts(value, unit, source, category=category)
+
+
+def _size_from_multipack(match: re.Match, category: str | None = None) -> ParsedSize | None:
+    count = _parse_number(match.group("count"))
+    value = _parse_number(match.group("item_value"))
+    unit = _normalize_unit(match.group("item_unit"))
+    source = match.group(0)
+    return _size_from_parts(count * value, unit, source, category=category)
+
+
 def parse_size(text: str | None, category: str | None = None) -> ParsedSize | None:
     if not text:
         return None
@@ -114,8 +147,9 @@ def parse_size(text: str | None, category: str | None = None) -> ParsedSize | No
     if _DOZEN_RE.search(text):
         return ParsedSize(value=12.0, unit="ct", source="dozen")
 
+    multipack_matches = [_size_from_multipack(match, category=category) for match in _MULTIPACK_RE.finditer(text)]
     matches = [_size_from_match(match, category=category) for match in _SIZE_RE.finditer(text)]
-    sizes = [size for size in matches if size is not None]
+    sizes = [size for size in [*multipack_matches, *matches] if size is not None]
     if not sizes:
         return None
 

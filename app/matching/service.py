@@ -8,6 +8,16 @@ from app.matching.scorer import score_fingerprints
 SUPPORTED_RETAILERS = ("aldi", "kroger", "publix", "walmart")
 
 
+def _result_sort_key(result):
+    fingerprint = result.fingerprint
+    return (
+        -result.score,
+        fingerprint.retailer or "",
+        fingerprint.product_id or "",
+        fingerprint.source_name,
+    )
+
+
 def match_products(
     query: str,
     products: list[dict[str, Any]],
@@ -35,9 +45,9 @@ def match_products(
         else:
             rejected.append(result)
 
-    equivalent.sort(key=lambda item: item.score, reverse=True)
-    substitutes.sort(key=lambda item: item.score, reverse=True)
-    rejected.sort(key=lambda item: item.score, reverse=True)
+    equivalent.sort(key=_result_sort_key)
+    substitutes.sort(key=_result_sort_key)
+    rejected.sort(key=_result_sort_key)
 
     return MatchSearchResponse(
         query=query,
