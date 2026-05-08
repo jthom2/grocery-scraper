@@ -30,3 +30,4 @@ test/
 /.*
 
 tests/performance/baselines/performance.json
+*.jsonl

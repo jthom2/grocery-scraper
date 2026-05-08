@@ -48,7 +48,7 @@ class PublixSpider(Spider):
 
     def __init__(self, queries: list[str], location_id: str | None = None, max_results: int = 10, *args, **kwargs):
         self.queries = queries
-        self.location_id = str(location_id) if location_id else None
+        self.location_id = str(location_id) if location_id else "1822"
         self.max_results = max_results
         self.cookie_dict = _build_store_cookie(self.location_id)
         self.cookies = _dict_cookies_to_playwright(self.cookie_dict)
@@ -64,7 +64,7 @@ class PublixSpider(Spider):
                 disable_resources=False,
                 network_idle=True,
                 solve_cloudflare=False,
-                real_chrome=True,
+                real_chrome=False,
                 hide_canvas=True,
                 block_webrtc=True,
                 google_search=False,
