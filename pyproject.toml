@@ -20,6 +20,7 @@ dependencies = [
     "requests>=2.33.1",
     "scrapling[all]>=0.4.3",
     "fastapi[standard]>=0.110.0",
+    "rapidfuzz>=3.14.0",
 ]
 
 [project.scripts]

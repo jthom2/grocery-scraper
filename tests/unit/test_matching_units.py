@@ -33,6 +33,20 @@ def test_half_gallon_parses_to_fluid_ounces():
     assert size.unit == "fl_oz"
 
 
+def test_bare_gallon_parses_for_milk():
+    size = parse_size("2% milk gallon", category="milk")
+
+    assert size.value == 128
+    assert size.unit == "fl_oz"
+
+
+def test_product_name_bare_gallon_parses_for_milk():
+    size = parse_size("Great Value 2% Milk, Gallon", category="milk")
+
+    assert size.value == 128
+    assert size.unit == "fl_oz"
+
+
 def test_numeric_half_gallon_parses_to_fluid_ounces():
     size = parse_size("1/2 gal 2% milk")
 

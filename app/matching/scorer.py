@@ -93,6 +93,7 @@ def score_fingerprints(
         return MatchResult(
             decision="different",
             score=0.0,
+            rank_score=0.0,
             fingerprint=candidate,
             product=product,
             reasons=reasons,
@@ -114,6 +115,7 @@ def score_fingerprints(
             return MatchResult(
                 decision="different",
                 score=REJECT_SCORES["size_conflict"],
+                rank_score=REJECT_SCORES["size_conflict"],
                 fingerprint=candidate,
                 product=product,
                 reasons=reasons,
@@ -133,6 +135,7 @@ def score_fingerprints(
         return MatchResult(
             decision="different",
             score=min(score, REJECT_SCORES["attribute_conflict_cap"]),
+            rank_score=min(score, REJECT_SCORES["attribute_conflict_cap"]),
             fingerprint=candidate,
             product=product,
             reasons=reasons,
@@ -156,6 +159,7 @@ def score_fingerprints(
             return MatchResult(
                 decision="different",
                 score=min(score, REJECT_SCORES["brand_conflict_cap"]),
+                rank_score=min(score, REJECT_SCORES["brand_conflict_cap"]),
                 fingerprint=candidate,
                 product=product,
                 reasons=reasons,
@@ -186,6 +190,7 @@ def score_fingerprints(
     return MatchResult(
         decision=decision,
         score=score,
+        rank_score=score,
         fingerprint=candidate,
         product=product,
         reasons=reasons,

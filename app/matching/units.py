@@ -77,6 +77,7 @@ _TWIN_PACK_RE = re.compile(
 _TWIN_PACK_COUNTS = {"twin": 2, "double": 2, "triple": 3}
 
 _HALF_GALLON_RE = re.compile(r"\bhalf\s+(?:gallon|gal\.?)\b", re.IGNORECASE)
+_BARE_GALLON_RE = re.compile(r"\b(?:gallons?|gal\.?)\b", re.IGNORECASE)
 _DOZEN_RE = re.compile(r"\b(?:a\s+)?dozen\b", re.IGNORECASE)
 _TOTAL_WEIGHT_RE = re.compile(
     rf"\b(?:total\s+(?:weight|wt\.?)|net\s+wt\.?)\s*:?\s*"
@@ -261,6 +262,9 @@ def parse_size(text: str | None, category: str | None = None) -> ParsedSize | No
 
     if _DOZEN_RE.search(text):
         return ParsedSize(value=12.0, unit="ct", source="dozen")
+
+    if category == "milk" and not _SIZE_RE.search(text) and _BARE_GALLON_RE.search(text):
+        return ParsedSize(value=128.0, unit="fl_oz", source="gallon")
 
     # gather all size candidates
     multipack_sizes = [_size_from_multipack(m, category=category) for m in _MULTIPACK_RE.finditer(text)]

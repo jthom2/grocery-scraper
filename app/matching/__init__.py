@@ -4,6 +4,7 @@ from app.matching.models import (
     MatchSearchResponse,
     ParsedSize,
     ProductFingerprint,
+    RetailerMatchGroup,
 )
 from app.matching.normalizer import fingerprint_product, fingerprint_query
 from app.matching.scorer import score_fingerprints
@@ -14,6 +15,7 @@ __all__ = [
     "MatchSearchResponse",
     "ParsedSize",
     "ProductFingerprint",
+    "RetailerMatchGroup",
     "fingerprint_product",
     "fingerprint_query",
     "score_fingerprints",

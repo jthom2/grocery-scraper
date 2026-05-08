@@ -202,4 +202,6 @@ def test_match_products_uses_deterministic_tie_sort():
 
     response = match_products("2% milk 1 gallon", products)
 
-    assert [item.product["product_id"] for item in response.equivalent] == ["a", "b"]
+    walmart = response.matches_by_retailer["walmart"]
+
+    assert [item.product["product_id"] for item in walmart.candidates] == ["a", "b"]
