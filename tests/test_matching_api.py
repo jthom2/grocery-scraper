@@ -59,13 +59,15 @@ def test_match_search_fetches_multiple_candidates_per_retailer(mock_clients):
         }
     ]
 
-    response = client.post("/api/v1/match/search", json={
-        "query": "2% milk 1 gallon",
-        "retailers": ["walmart", "kroger"],
-        "location_ids": {"walmart": "789", "kroger": "123"},
-        "zip_code": "30303",
-        "max_candidates_per_retailer": 3,
-    })
+    response = client.post(
+        "/api/v1/match/search?walmart_location_id=789&kroger_location_id=123",
+        json={
+            "query": "2% milk 1 gallon",
+            "retailers": ["walmart", "kroger"],
+            "zip_code": "30303",
+            "max_candidates_per_retailer": 3,
+        },
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -107,6 +109,22 @@ def test_match_search_returns_retailer_errors_without_failing(mock_clients):
     data = response.json()
     assert data["errors"] == {"walmart": "blocked"}
     assert len(data["equivalent"]) == 1
+
+
+def test_match_search_exposes_location_ids_as_query_params():
+    schema = client.get("/openapi.json").json()
+
+    post_schema = schema["paths"]["/api/v1/match/search"]["post"]
+    parameter_names = {parameter["name"] for parameter in post_schema["parameters"]}
+    request_properties = schema["components"]["schemas"]["MatchSearchRequest"]["properties"]
+
+    assert {
+        "aldi_location_id",
+        "kroger_location_id",
+        "publix_location_id",
+        "walmart_location_id",
+    }.issubset(parameter_names)
+    assert "location_ids" not in request_properties
 
 
 def test_existing_unified_search_contract_is_unchanged(mock_clients):

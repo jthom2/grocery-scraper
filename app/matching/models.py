@@ -48,7 +48,6 @@ class MatchResult(MatchingBaseModel):
 class MatchSearchRequest(MatchingBaseModel):
     query: str = Field(..., min_length=1)
     retailers: list[str] | None = None
-    location_ids: dict[str, str] = Field(default_factory=dict)
     zip_code: str | None = None
     max_candidates_per_retailer: int = Field(default=8, ge=1, le=50)
     equivalence_threshold: float = Field(default=0.82, ge=0, le=1)

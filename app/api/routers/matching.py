@@ -2,7 +2,7 @@ import asyncio
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 
 from app.aldi.client import AldiClient
@@ -31,8 +31,13 @@ def _selected_retailers(request: MatchSearchRequest) -> list[str]:
     return normalized
 
 
-def _search_retailer(retailer: str, client: Any, request: MatchSearchRequest) -> list[dict[str, Any]]:
-    location_id = request.location_ids.get(retailer)
+def _search_retailer(
+    retailer: str,
+    client: Any,
+    request: MatchSearchRequest,
+    location_ids: dict[str, str],
+) -> list[dict[str, Any]]:
+    location_id = location_ids.get(retailer)
     kwargs: dict[str, Any] = {}
 
     if location_id:
@@ -54,6 +59,10 @@ def _search_retailer(retailer: str, client: Any, request: MatchSearchRequest) ->
 @router.post("/search", response_model=MatchSearchResponse)
 async def match_search(
     request: MatchSearchRequest,
+    aldi_location_id: str | None = Query(None, description="aldi store location id"),
+    kroger_location_id: str | None = Query(None, description="kroger store location id"),
+    publix_location_id: str | None = Query(None, description="publix store location id"),
+    walmart_location_id: str | None = Query(None, description="walmart store location id"),
     aldi_client: AldiClient = Depends(get_aldi_client),
     kroger_client: KrogerClient = Depends(get_kroger_client),
     publix_client: PublixClient = Depends(get_publix_client),
@@ -66,9 +75,19 @@ async def match_search(
         "walmart": walmart_client,
     }
     retailers = _selected_retailers(request)
+    location_ids = {
+        retailer: location_id
+        for retailer, location_id in {
+            "aldi": aldi_location_id,
+            "kroger": kroger_location_id,
+            "publix": publix_location_id,
+            "walmart": walmart_location_id,
+        }.items()
+        if location_id
+    }
 
     tasks = {
-        retailer: run_in_threadpool(_search_retailer, retailer, clients[retailer], request)
+        retailer: run_in_threadpool(_search_retailer, retailer, clients[retailer], request, location_ids)
         for retailer in retailers
     }
     gathered = await asyncio.gather(*tasks.values(), return_exceptions=True)
