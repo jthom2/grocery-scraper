@@ -20,7 +20,7 @@ def write_jsonl(items: list[dict], output_path: Path) -> None:
 
 def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="Run Aldi batch grocery searches.")
-    parser.add_argument("--zip-code", required=True, help="ZIP code for Aldi inventory context")
+    parser.add_argument("--zip-code", default="36830", help="ZIP code for Aldi inventory context")
     parser.add_argument("--location-id", help="Aldi shop/location id")
     parser.add_argument("--max-results", type=int, default=10, help="Maximum products per search query")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="Output JSONL file path")
