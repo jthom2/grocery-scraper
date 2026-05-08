@@ -20,7 +20,7 @@ def write_jsonl(items: list[dict], output_path: Path) -> None:
 
 def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="Run Publix batch grocery searches.")
-    parser.add_argument("--location-id", help="Publix store location id")
+    parser.add_argument("--location-id", default="1822", help="Publix store location id (default: 1822)")
     parser.add_argument("--max-results", type=int, default=10, help="Maximum products per search query")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="Output JSONL file path")
     args = parser.parse_args(argv)

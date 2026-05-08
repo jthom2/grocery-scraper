@@ -1,9 +1,12 @@
 import logging
+import random
+import threading
+import time
 import urllib.parse
 
 from scrapling import StealthyFetcher
 
-from app.models import normalize_location, normalize_product
+from app.models import normalize_location
 from app.utils import fetcher
 from app.utils.store_client import BaseStoreClient
 from app.kroger import build_cookies as build_kroger_cookies
@@ -15,11 +18,19 @@ from app.kroger.parser import (
     normalize_kroger_product,
 )
 
-from app.errors import ScraperNetworkError, ScraperBlockedError, ScraperParsingError
+from app.errors import ScraperNetworkError, ScraperBlockedError
 
 logger = logging.getLogger(__name__)
 
 _USE_BROWSER_POOL = False
+_POOL_MIN_INTERVAL_SECONDS = 1.25
+_POOL_JITTER_SECONDS = 0.35
+_POOL_MAX_ATTEMPTS = 2
+_POOL_BACKOFF_SECONDS = 1.5
+_POOL_WARMUP_DONE = False
+_POOL_RATE_LOCK = threading.Lock()
+_POOL_WARMUP_LOCK = threading.Lock()
+_POOL_LAST_REQUEST_AT = 0.0
 
 
 class KrogerClient(BaseStoreClient):
@@ -90,6 +101,120 @@ class KrogerClient(BaseStoreClient):
         return results
 
     # fetches and normalizes kroger product search results using browser automation
+    def _fetch_page_primary(self, url, cookies):
+        sf = StealthyFetcher()
+        return sf.fetch(
+            url,
+            cookies=cookies,
+            headless=True,
+            solve_cloudflare=False,
+            google_search=False,
+            extra_headers={'referer': REFERER},
+        )
+
+    # extracts non-sensitive block markers from response headers
+    def _extract_block_telemetry(self, response, fetch_mode):
+        headers = (response.headers or {}) if hasattr(response, 'headers') else {}
+        normalized_headers = {str(k).lower(): str(v) for k, v in headers.items()}
+        set_cookie = normalized_headers.get('set-cookie', '').lower()
+        response_url = str(getattr(response, "url", ""))
+        path = urllib.parse.urlparse(response_url).path if response_url else ""
+
+        return {
+            "fetch_mode": fetch_mode,
+            "status": getattr(response, "status", None),
+            "path": path,
+            "server": normalized_headers.get('server'),
+            "akamai_grn": normalized_headers.get('akamai-grn'),
+            "has_abck_cookie": '_abck=' in set_cookie,
+            "has_bm_cookie": 'bm_' in set_cookie,
+        }
+
+    # logs block diagnostics for actionable runtime troubleshooting
+    def _log_blocked_response(self, response, fetch_mode):
+        logger.warning("Kroger blocked response: %s", self._extract_block_telemetry(response, fetch_mode))
+
+    # keeps blocked responses explicit across all fetch paths
+    def _raise_if_blocked(self, response, fetch_mode):
+        status = getattr(response, "status", None)
+        if status in {403, 429}:
+            self._log_blocked_response(response, fetch_mode)
+            raise ScraperBlockedError(
+                f"Blocked by anti-bot: {status}",
+                status_code=status,
+                url=getattr(response, "url", None),
+            )
+
+    # avoids high-frequency pool calls that can trigger stricter bot defenses
+    def _pace_pool_request(self):
+        global _POOL_LAST_REQUEST_AT
+        with _POOL_RATE_LOCK:
+            now = time.monotonic()
+            elapsed = now - _POOL_LAST_REQUEST_AT
+            delay = _POOL_MIN_INTERVAL_SECONDS - elapsed
+            if delay > 0:
+                time.sleep(delay + random.uniform(0.0, _POOL_JITTER_SECONDS))
+            _POOL_LAST_REQUEST_AT = time.monotonic()
+
+    # performs a one-time browser warmup request before search calls
+    def _warmup_pool(self, pool):
+        global _POOL_WARMUP_DONE
+        if _POOL_WARMUP_DONE:
+            return
+        with _POOL_WARMUP_LOCK:
+            if _POOL_WARMUP_DONE:
+                return
+            try:
+                self._pace_pool_request()
+                warmup_page = pool.fetch(
+                    BASE_URL,
+                    cookies=None,
+                    google_search=False,
+                    extra_headers={'referer': REFERER},
+                )
+                if getattr(warmup_page, "status", None) in {403, 429}:
+                    self._log_blocked_response(warmup_page, "browser_pool_warmup")
+            except Exception as e:
+                logger.debug(f"Kroger browser pool warmup failed: {e}")
+            finally:
+                _POOL_WARMUP_DONE = True
+
+    # retries blocked/failed requests using pooled real-browser session
+    def _fetch_page_pool(self, url, cookies):
+        pool = get_browser_pool()
+        self._warmup_pool(pool)
+
+        last_error = None
+        for attempt in range(1, _POOL_MAX_ATTEMPTS + 1):
+            try:
+                self._pace_pool_request()
+                page = pool.fetch(
+                    url,
+                    cookies=cookies,
+                    google_search=False,
+                    extra_headers={'referer': REFERER},
+                )
+                logger.debug(f"Kroger search using browser pool (request #{pool.request_count}, attempt {attempt})")
+                self._raise_if_blocked(page, "browser_pool")
+                return page
+            except ScraperBlockedError as e:
+                last_error = e
+                if attempt >= _POOL_MAX_ATTEMPTS:
+                    raise
+                time.sleep(_POOL_BACKOFF_SECONDS + random.uniform(0.0, _POOL_JITTER_SECONDS))
+            except Exception as e:
+                last_error = e
+                if attempt >= _POOL_MAX_ATTEMPTS:
+                    raise ScraperNetworkError(
+                        f"Kroger browser pool fetch failed: {e}",
+                        url=url,
+                    ) from e
+                time.sleep(_POOL_BACKOFF_SECONDS + random.uniform(0.0, _POOL_JITTER_SECONDS))
+
+        if last_error:
+            raise last_error
+        raise ScraperNetworkError("Kroger browser pool fetch failed", url=url)
+
     def _fetch_products(self, query, location_id=None, max_results=5, **kwargs):
         cookies = kwargs.get('cookies')
         params = {'query': query, 'searchType': 'default_search'}
@@ -98,12 +223,17 @@ class KrogerClient(BaseStoreClient):
         playwright_cookies = _dict_cookies_to_playwright(cookies) if isinstance(cookies, dict) else cookies
 
         if _USE_BROWSER_POOL:
-            pool = get_browser_pool()
-            page = pool.fetch(url, cookies=playwright_cookies, google_search=False, extra_headers={'referer': REFERER})
-            logger.debug(f"Kroger search using browser pool (request #{pool.request_count})")
+            page = self._fetch_page_pool(url, playwright_cookies)
         else:
-            sf = StealthyFetcher()
-            page = sf.fetch(url, cookies=playwright_cookies, headless=True, solve_cloudflare=False, google_search=False, extra_headers={'referer': REFERER})
+            try:
+                page = self._fetch_page_primary(url, playwright_cookies)
+                self._raise_if_blocked(page, "stealthy_fetcher")
+            except ScraperBlockedError as e:
+                logger.debug(f"Kroger primary fetch blocked, retrying via browser pool: {e}")
+                page = self._fetch_page_pool(url, playwright_cookies)
+            except Exception as e:
+                logger.debug(f"Kroger primary fetch failed, retrying via browser pool: {e}")
+                page = self._fetch_page_pool(url, playwright_cookies)
 
         state = extract_initial_state(page)
 

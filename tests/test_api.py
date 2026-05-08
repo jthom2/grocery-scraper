@@ -60,6 +60,66 @@ def test_get_kroger_locations(mock_kroger):
     mock_kroger.get_stores.assert_called_once_with("90210", max_results=2)
 
 
+def test_get_all_locations(mock_aldi, mock_kroger, mock_publix, mock_walmart):
+    mock_aldi.get_stores.return_value = [
+        {"retailer": "aldi", "location_id": "1", "name": "ALDI 1"}
+    ]
+    mock_kroger.get_stores.return_value = [
+        {"retailer": "kroger", "location_id": "2", "name": "Kroger 2"}
+    ]
+    mock_publix.get_stores.return_value = [
+        {"retailer": "publix", "location_id": "3", "name": "Publix 3"}
+    ]
+    mock_walmart.get_stores.return_value = [
+        {"retailer": "walmart", "location_id": "4", "name": "Walmart 4"}
+    ]
+
+    response = client.get("/api/v1/locations?zip_code=30303&max_results_per_retailer=2")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["zip_code"] == "30303"
+    assert data["errors"] == {}
+    assert data["locations"]["aldi"][0]["location_id"] == "1"
+    assert data["locations"]["kroger"][0]["location_id"] == "2"
+    assert data["locations"]["publix"][0]["location_id"] == "3"
+    assert data["locations"]["walmart"][0]["location_id"] == "4"
+    mock_aldi.get_stores.assert_called_once_with("30303", max_results=2)
+    mock_kroger.get_stores.assert_called_once_with("30303", max_results=2)
+    mock_publix.get_stores.assert_called_once_with("30303", max_results=2)
+    mock_walmart.get_stores.assert_called_once_with("30303", max_results=2)
+
+
+def test_get_all_locations_returns_partial_errors(mock_aldi, mock_kroger, mock_publix, mock_walmart):
+    mock_aldi.get_stores.return_value = [
+        {"retailer": "aldi", "location_id": "1", "name": "ALDI 1"}
+    ]
+    mock_kroger.get_stores.return_value = []
+    mock_publix.get_stores.return_value = []
+    mock_walmart.get_stores.side_effect = Exception("blocked")
+
+    response = client.get("/api/v1/locations?zip_code=30303")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["locations"]["aldi"][0]["location_id"] == "1"
+    assert data["locations"]["walmart"] == []
+    assert data["errors"] == {"walmart": "blocked"}
+    mock_aldi.get_stores.assert_called_once_with("30303", max_results=10)
+    mock_kroger.get_stores.assert_called_once_with("30303", max_results=10)
+    mock_publix.get_stores.assert_called_once_with("30303", max_results=10)
+    mock_walmart.get_stores.assert_called_once_with("30303", max_results=10)
+
+
+def test_unified_locations_openapi_contract():
+    schema = client.get("/openapi.json").json()
+
+    get_schema = schema["paths"]["/api/v1/locations"]["get"]
+    parameter_names = {parameter["name"] for parameter in get_schema["parameters"]}
+
+    assert {"zip_code", "max_results_per_retailer"}.issubset(parameter_names)
+
+
 def test_search_aldi(mock_aldi):
     mock_aldi.search_products.return_value = [
         {"retailer": "aldi", "name": "Milk", "price": 2.50}

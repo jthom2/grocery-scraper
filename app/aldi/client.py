@@ -1,6 +1,7 @@
 import time
 import re
 import uuid
+import urllib.parse
 import orjson
 import logging
 import requests
@@ -246,6 +247,59 @@ def extract_item_ids(placements, max_ids=40):
     return item_ids[:max_ids]
 
 
+# builds the full graphql url for search placements without executing the request
+def build_search_placements_url(query, zip_code, shop_id, token, max_results=5):
+    variables = {
+        'filters': [],
+        'action': None,
+        'query': query,
+        'pageViewId': str(uuid.uuid4()),
+        'retailerInventorySessionToken': token,
+        'elevatedProductId': None,
+        'searchSource': 'search',
+        'disableReformulation': False,
+        'disableLlm': False,
+        'forceInspiration': False,
+        'orderBy': 'bestMatch',
+        'clusterId': None,
+        'includeDebugInfo': False,
+        'clusteringStrategy': None,
+        'contentManagementSearchParams': {'itemGridColumnCount': 3},
+        'shopId': str(shop_id),
+        'postalCode': zip_code,
+        'zoneId': DEFAULT_ZONE_ID,
+        'first': max(max_results, 4),
+    }
+    return _build_persisted_query_url('SearchResultsPlacements', variables, SEARCH_RESULTS_PLACEMENTS_HASH)
+
+
+# builds the full graphql url for item details without executing the request
+def build_items_url(item_ids, shop_id, zip_code):
+    variables = {
+        'ids': item_ids,
+        'shopId': str(shop_id),
+        'zoneId': DEFAULT_ZONE_ID,
+        'postalCode': zip_code,
+    }
+    return _build_persisted_query_url('Items', variables, ITEMS_HASH)
+
+
+# constructs a graphql persisted query url with encoded params
+def _build_persisted_query_url(operation_name, variables, query_hash):
+    params = {
+        'operationName': operation_name,
+        'variables': orjson.dumps(variables).decode(),
+        'extensions': orjson.dumps({
+            'persistedQuery': {
+                'version': 1,
+                'sha256Hash': query_hash,
+            }
+        }).decode(),
+    }
+    encoded = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+    return f"{GRAPHQL_URL}?{encoded}"
+
+
 # fetches detailed product information for a list of item ids
 def fetch_items(item_ids, shop_id, zip_code, cookies, referer):
     data = run_persisted_query(
@@ -268,7 +322,17 @@ def fetch_items(item_ids, shop_id, zip_code, cookies, referer):
 
 # establishes session, fetches credentials, and builds the complete search context needed for product queries
 def build_search_context_from_page(search_page, location_id=None, zip_code=None):
-    cookies = search_page.cookies
+    raw_cookies = search_page.cookies
+    # normalize cookies to a plain dict for fetcher compatibility
+    # playwright/stealthy session returns tuple of dicts with 'name'/'value' keys
+    if isinstance(raw_cookies, dict):
+        cookies = raw_cookies
+    elif isinstance(raw_cookies, (list, tuple)):
+        cookies = {c['name']: c['value'] for c in raw_cookies if isinstance(c, dict) and 'name' in c and 'value' in c}
+    elif hasattr(raw_cookies, 'items'):
+        cookies = dict(raw_cookies.items())
+    else:
+        cookies = {}
     referer = str(search_page.url)
 
     resolved_zip = zip_code or get_default_zip(cookies, referer)

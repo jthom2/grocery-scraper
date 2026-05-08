@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from fastapi.concurrency import run_in_threadpool
 
-from app.models import NormalizedProduct
+from app.models import NormalizedProduct, StoreLocationsResponse
 from app.aldi.client import AldiClient
 from app.kroger.client import KrogerClient
 from app.publix.client import PublixClient
@@ -15,6 +15,55 @@ from app.api.dependencies import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+@router.get("/locations", response_model=StoreLocationsResponse)
+async def get_locations_all(
+    zip_code: str = Query(..., description="zip code to find stores near"),
+    max_results_per_retailer: int = Query(
+        10,
+        ge=1,
+        le=50,
+        description="maximum number of store locations per retailer",
+    ),
+    aldi_client: AldiClient = Depends(get_aldi_client),
+    kroger_client: KrogerClient = Depends(get_kroger_client),
+    publix_client: PublixClient = Depends(get_publix_client),
+    walmart_client: WalmartClient = Depends(get_walmart_client),
+):
+    clients = {
+        "aldi": aldi_client,
+        "kroger": kroger_client,
+        "publix": publix_client,
+        "walmart": walmart_client,
+    }
+
+    tasks = {
+        retailer: run_in_threadpool(
+            client.get_stores,
+            zip_code,
+            max_results=max_results_per_retailer,
+        )
+        for retailer, client in clients.items()
+    }
+    gathered = await asyncio.gather(*tasks.values(), return_exceptions=True)
+
+    locations = {}
+    errors = {}
+    for retailer, result in zip(tasks.keys(), gathered):
+        if isinstance(result, Exception):
+            logger.error("Error in unified locations for %s: %s", retailer, result)
+            locations[retailer] = []
+            errors[retailer] = str(result)
+            continue
+        locations[retailer] = result or []
+
+    return {
+        "zip_code": zip_code,
+        "locations": locations,
+        "errors": errors,
+    }
+
 
 @router.get("/search", response_model=List[NormalizedProduct])
 async def search_all(

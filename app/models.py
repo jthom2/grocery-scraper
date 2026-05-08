@@ -29,6 +29,12 @@ class NormalizedLocation(NormalizedBaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class StoreLocationsResponse(NormalizedBaseModel):
+    zip_code: str
+    locations: dict[str, list[NormalizedLocation]] = Field(default_factory=dict)
+    errors: dict[str, str] = Field(default_factory=dict)
+
+
 class NormalizedProduct(NormalizedBaseModel):
     retailer: str
     product_id: str | None = Field(

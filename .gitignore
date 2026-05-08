@@ -30,3 +30,5 @@ test/
 /.*
 
 tests/performance/baselines/performance.json
+*.jsonl
+*/*/spider_results/

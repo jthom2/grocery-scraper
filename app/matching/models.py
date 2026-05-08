@@ -4,8 +4,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 MatchDecision = Literal["equivalent", "substitute", "different"]
+RetailerMatchStatus = Literal["equivalent", "substitute", "no_match", "error"]
 BrandClass = Literal["store_brand", "national_brand", "unknown"]
-SizeUnit = Literal["fl_oz", "oz", "ct"]
+SizeUnit = Literal["fl_oz", "oz", "ct", "ml", "l", "each", "sq_ft"]
 
 
 class MatchingBaseModel(BaseModel):
@@ -39,25 +40,33 @@ class ProductFingerprint(MatchingBaseModel):
 class MatchResult(MatchingBaseModel):
     decision: MatchDecision
     score: float
+    similarity_score: float = 0.0
+    rank_score: float = 0.0
     fingerprint: ProductFingerprint
     product: dict[str, Any] | None = None
+    similarity_reasons: list[str] = Field(default_factory=list)
     reasons: list[str] = Field(default_factory=list)
     penalties: list[str] = Field(default_factory=list)
+
+
+class RetailerMatchGroup(MatchingBaseModel):
+    retailer: str
+    status: RetailerMatchStatus
+    best: MatchResult | None = None
+    candidates: list[MatchResult] = Field(default_factory=list)
+    error: str | None = None
 
 
 class MatchSearchRequest(MatchingBaseModel):
     query: str = Field(..., min_length=1)
     retailers: list[str] | None = None
-    location_ids: dict[str, str] = Field(default_factory=dict)
     zip_code: str | None = None
-    max_candidates_per_retailer: int = Field(default=8, ge=1, le=50)
+    max_candidates_per_retailer: int = Field(default=24, ge=1, le=50)
     equivalence_threshold: float = Field(default=0.82, ge=0, le=1)
 
 
 class MatchSearchResponse(MatchingBaseModel):
     query: str
     canonical_fingerprint: ProductFingerprint
-    equivalent: list[MatchResult] = Field(default_factory=list)
-    substitutes: list[MatchResult] = Field(default_factory=list)
-    rejected: list[MatchResult] = Field(default_factory=list)
+    matches_by_retailer: dict[str, RetailerMatchGroup] = Field(default_factory=dict)
     errors: dict[str, str] = Field(default_factory=dict)
