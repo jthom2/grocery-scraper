@@ -25,6 +25,7 @@ dependencies = [
 
 [project.scripts]
 walmart-search = "app.walmart.client:main"
+walmart-batch = "app.walmart.export:main"
 kroger-search = "app.kroger.client:main"
 kroger-batch = "app.kroger.export:main"
 publix-search = "app.publix.client:main"
