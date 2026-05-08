@@ -41,9 +41,9 @@ class PublixSpider(Spider):
     name = "publix_batch_spider"
     allowed_domains = {"publix.com", "www.publix.com"}
 
-    concurrent_requests = 1
+    concurrent_requests = 3
     concurrent_requests_per_domain = 1
-    download_delay = 12.0
+    download_delay = 2.0
     max_blocked_retries = 3
 
     def __init__(self, queries: list[str], location_id: str | None = None, max_results: int = 10, *args, **kwargs):
