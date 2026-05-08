@@ -43,7 +43,7 @@ class KrogerSpider(Spider):
                 disable_resources=False,
                 network_idle=True,
                 solve_cloudflare=True,
-                real_chrome=True,
+                real_chrome=False,
                 hide_canvas=True,
                 block_webrtc=True,
                 google_search=False,
